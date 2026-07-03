@@ -94,6 +94,82 @@ export default function NuevoProductoPage() {
   const [ubicaciones, setUbicaciones] = useState<UbiRow[]>([]);
   const [proveedores, setProveedores] = useState<ProvRow[]>([]);
 
+  // Modales rápidos: crear categoría o proveedor sin perder el formulario
+  const [catModalOpen, setCatModalOpen] = useState(false);
+  const [catModalName, setCatModalName] = useState("");
+  const [catModalSaving, setCatModalSaving] = useState(false);
+  const [catModalError, setCatModalError] = useState<string | null>(null);
+  const [provModalOpen, setProvModalOpen] = useState(false);
+  const [provModalName, setProvModalName] = useState("");
+  const [provModalSaving, setProvModalSaving] = useState(false);
+  const [provModalError, setProvModalError] = useState<string | null>(null);
+
+  async function crearCategoriaRapida() {
+    const nombre = catModalName.trim();
+    if (!nombre) {
+      setCatModalError("Ingresá un nombre.");
+      return;
+    }
+    setCatModalSaving(true);
+    setCatModalError(null);
+    try {
+      const res = await fetch("/api/inventario/categorias", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCatModalError(data?.error ?? "No se pudo crear la categoría.");
+        return;
+      }
+      const nueva = data?.categoria ?? data;
+      if (nueva?.id) {
+        setCategorias((prev) => [...prev, { id: nueva.id, nombre: nueva.nombre }].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+        setCategoriaId(nueva.id);
+      }
+      setCatModalOpen(false);
+      setCatModalName("");
+    } catch (e) {
+      setCatModalError(e instanceof Error ? e.message : "Error de red.");
+    } finally {
+      setCatModalSaving(false);
+    }
+  }
+
+  async function crearProveedorRapido() {
+    const nombre = provModalName.trim();
+    if (!nombre) {
+      setProvModalError("Ingresá un nombre.");
+      return;
+    }
+    setProvModalSaving(true);
+    setProvModalError(null);
+    try {
+      const res = await fetch("/api/proveedores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProvModalError(data?.error ?? "No se pudo crear el proveedor.");
+        return;
+      }
+      const nuevo = data?.proveedor ?? data;
+      if (nuevo?.id) {
+        setProveedores((prev) => [...prev, { id: nuevo.id, nombre: nuevo.nombre }].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+        setProveedorId(nuevo.id);
+      }
+      setProvModalOpen(false);
+      setProvModalName("");
+    } catch (e) {
+      setProvModalError(e instanceof Error ? e.message : "Error de red.");
+    } finally {
+      setProvModalSaving(false);
+    }
+  }
+
   useEffect(() => {
     let cancel = false;
     async function load(url: string) {
@@ -807,12 +883,13 @@ export default function NuevoProductoPage() {
                   <span className="text-xs text-gray-400 truncate">
                     {categorias.length === 0 ? "Todavía no cargaste categorías." : `${categorias.length} disponibles`}
                   </span>
-                  <Link
-                    href="/inventario/categorias"
+                  <button
+                    type="button"
+                    onClick={() => { setCatModalError(null); setCatModalOpen(true); }}
                     className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:text-sky-900 border border-sky-200 hover:bg-sky-50 px-2.5 py-1 rounded-md transition-colors"
                   >
                     + Crear
-                  </Link>
+                  </button>
                 </div>
               </div>
 
@@ -829,12 +906,13 @@ export default function NuevoProductoPage() {
                   <span className="text-xs text-gray-400 truncate">
                     {proveedores.length === 0 ? "Todavía no cargaste proveedores." : `${proveedores.length} disponibles`}
                   </span>
-                  <Link
-                    href="/proveedores/nuevo"
+                  <button
+                    type="button"
+                    onClick={() => { setProvModalError(null); setProvModalOpen(true); }}
                     className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:text-sky-900 border border-sky-200 hover:bg-sky-50 px-2.5 py-1 rounded-md transition-colors"
                   >
                     + Crear
-                  </Link>
+                  </button>
                 </div>
               </div>
 
@@ -1038,6 +1116,88 @@ export default function NuevoProductoPage() {
 
         </form>
       </div>
+
+      {catModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => !catModalSaving && setCatModalOpen(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-800">Nueva categoría</h3>
+            <p className="mt-1 text-xs text-slate-500">Se creará y quedará seleccionada en este producto.</p>
+            <div className="mt-4">
+              <label className="text-xs font-medium text-slate-600">Nombre</label>
+              <input
+                type="text"
+                autoFocus
+                value={catModalName}
+                onChange={(e) => setCatModalName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); crearCategoriaRapida(); } }}
+                placeholder="Ej: BEBIDAS"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                disabled={catModalSaving}
+              />
+              {catModalError && <p className="mt-2 text-xs text-rose-600">{catModalError}</p>}
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCatModalOpen(false)}
+                disabled={catModalSaving}
+                className="rounded-md border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={crearCategoriaRapida}
+                disabled={catModalSaving}
+                className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {catModalSaving ? "Guardando…" : "Crear"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {provModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => !provModalSaving && setProvModalOpen(false)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-800">Nuevo proveedor</h3>
+            <p className="mt-1 text-xs text-slate-500">Se creará y quedará seleccionado en este producto.</p>
+            <div className="mt-4">
+              <label className="text-xs font-medium text-slate-600">Razón social / Nombre</label>
+              <input
+                type="text"
+                autoFocus
+                value={provModalName}
+                onChange={(e) => setProvModalName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); crearProveedorRapido(); } }}
+                placeholder="Ej: DISTRIBUIDORA S.A."
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                disabled={provModalSaving}
+              />
+              {provModalError && <p className="mt-2 text-xs text-rose-600">{provModalError}</p>}
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setProvModalOpen(false)}
+                disabled={provModalSaving}
+                className="rounded-md border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={crearProveedorRapido}
+                disabled={provModalSaving}
+                className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {provModalSaving ? "Guardando…" : "Crear"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
