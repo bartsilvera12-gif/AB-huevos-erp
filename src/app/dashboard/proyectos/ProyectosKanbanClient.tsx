@@ -744,28 +744,90 @@ function ProjectCardView({
         )}
       </button>
       {!dragOverlay ? (
-        <>
-          <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
-            <label className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mover a</label>
-            <select
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-              value={p.estado_id}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => onMove(p.id, e.target.value)}
-            >
-              {!estadoActivoIds.has(p.estado_id) ? (
-                <option value={p.estado_id}>Estado actual oculto / no usado</option>
-              ) : null}
-              {estados.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-        </>
+        <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <label className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mover a</label>
+          <EstadoSelector
+            estados={estados}
+            currentId={p.estado_id}
+            isCurrentInactive={!estadoActivoIds.has(p.estado_id)}
+            onSelect={(id) => onMove(p.id, id)}
+          />
+        </div>
       ) : null}
+    </div>
+  );
+}
+
+function EstadoSelector({
+  estados,
+  currentId,
+  isCurrentInactive,
+  onSelect,
+}: {
+  estados: EstadoRow[];
+  currentId: string;
+  isCurrentInactive: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = estados.find((e) => e.id === currentId);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const currentLabel = current
+    ? current.nombre
+    : isCurrentInactive
+      ? "Estado actual oculto / no usado"
+      : "Elegir…";
+  const currentColor = current?.color ?? "#94a3b8";
+
+  return (
+    <div ref={ref} className="relative mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        onPointerDown={(e) => e.stopPropagation()}
+        className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm outline-none transition-colors hover:border-slate-300 ${open ? "border-sky-400 ring-2 ring-sky-100" : "border-slate-200"}`}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: currentColor }} />
+          <span className="truncate">{currentLabel}</span>
+        </span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
+          {estados.map((e) => {
+            const active = e.id === currentId;
+            return (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => { onSelect(e.id); setOpen(false); }}
+                className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs ${active ? "bg-sky-50 font-semibold text-sky-700" : "text-slate-700 hover:bg-slate-50"}`}
+              >
+                <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: e.color ?? "#94a3b8" }} />
+                <span className="truncate">{e.nombre}</span>
+                {active && (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="ml-auto text-sky-500">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
