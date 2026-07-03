@@ -53,6 +53,8 @@ export default function InventarioPage() {
   const [filtroCategoria, setFiltroCategoria] = useState<string>(""); // "", "__sin__" o id
   const [refreshKey, setRefreshKey] = useState(0);
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
+  const [confirmarBorrar, setConfirmarBorrar] = useState<{ id: string; nombre: string } | null>(null);
+  const [errorBorrar, setErrorBorrar] = useState<string | null>(null);
 
   // Filtros por columna
   const [filtroPorNombre,  setFiltroPorNombre]  = useState("");
@@ -96,11 +98,17 @@ export default function InventarioPage() {
     return () => { cancelled = true; };
   }, [refreshKey]);
 
-  async function borrarProducto(id: string, nombre: string) {
+  function abrirConfirmarBorrar(id: string, nombre: string) {
     if (borrandoId) return;
-    const ok = window.confirm(`¿Borrar el producto "${nombre}"?\nEsta acción no se puede deshacer.`);
-    if (!ok) return;
+    setErrorBorrar(null);
+    setConfirmarBorrar({ id, nombre });
+  }
+
+  async function ejecutarBorrado() {
+    if (!confirmarBorrar) return;
+    const { id } = confirmarBorrar;
     setBorrandoId(id);
+    setErrorBorrar(null);
     try {
       const r = await fetch(`/api/productos/${encodeURIComponent(id)}`, {
         method: "DELETE",
@@ -108,12 +116,13 @@ export default function InventarioPage() {
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j?.success === false) {
-        window.alert(j?.error ?? "No se pudo borrar el producto.");
+        setErrorBorrar(j?.error ?? "No se pudo borrar el producto.");
         return;
       }
       setTodos((prev) => prev.filter((p) => p.id !== id));
+      setConfirmarBorrar(null);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Error de red.");
+      setErrorBorrar(e instanceof Error ? e.message : "Error de red.");
     } finally {
       setBorrandoId(null);
     }
@@ -570,7 +579,7 @@ export default function InventarioPage() {
                         </Link>
                         <button
                           type="button"
-                          onClick={() => borrarProducto(p.id, p.nombre)}
+                          onClick={() => abrirConfirmarBorrar(p.id, p.nombre)}
                           disabled={borrandoId === p.id}
                           className="inline-flex items-center justify-center min-h-[40px] rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:border-rose-300 hover:bg-rose-50 transition-colors disabled:opacity-50"
                         >
@@ -587,6 +596,54 @@ export default function InventarioPage() {
         </EdgeScrollArea>
 
       </div>
+
+      {confirmarBorrar && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm"
+          onClick={() => !borrandoId && setConfirmarBorrar(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-semibold text-slate-900">Borrar producto</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  ¿Seguro que querés borrar <span className="font-semibold text-slate-900">&quot;{confirmarBorrar.nombre}&quot;</span>?
+                </p>
+                <p className="mt-1 text-xs text-slate-500">Esta acción no se puede deshacer.</p>
+                {errorBorrar && (
+                  <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    {errorBorrar}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmarBorrar(null)}
+                disabled={!!borrandoId}
+                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={ejecutarBorrado}
+                disabled={!!borrandoId}
+                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50"
+              >
+                {borrandoId ? "Borrando…" : "Borrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
