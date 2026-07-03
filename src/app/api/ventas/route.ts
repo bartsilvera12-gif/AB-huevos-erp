@@ -63,7 +63,9 @@ export async function GET(request: NextRequest) {
     // Intentar leer con columnas de anulación (nueva feature). Si la migración
     // aún no se corrió (columnas no existen), fallback a la selección original
     // para no romper el listado ni el alta de ventas.
-    let ventasQ = await ctx.supabase
+    // Nota: usamos `any` para poder reasignar la respuesta con distinto shape.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let ventasQ: any = await ctx.supabase
       .from("ventas")
       .select(
         "id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva, total, tipo_venta, plazo_dias, metodo_pago, fecha, genera_nota_remision, nota_remision_numero, anulada, anulada_at, anulada_motivo"
@@ -72,7 +74,6 @@ export async function GET(request: NextRequest) {
       .order("fecha", { ascending: false })
       .limit(500);
     if (ventasQ.error) {
-      // Fallback sin columnas de anulación
       ventasQ = await ctx.supabase
         .from("ventas")
         .select(
