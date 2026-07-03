@@ -210,7 +210,7 @@ const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
   { id: "operaciones", titulo: "Operaciones", keys: ["inventario", "compras", "recetas", "proyectos"] },
   { id: "omnicanal", titulo: "Omnicanal", keys: ["conversaciones", "conversaciones-finalizadas", "historial-omnicanal", "monitoreo", "campanas"] },
   { id: "marketing", titulo: "Marketing y Automatización", keys: ["marketing", "marketing_ops", "sorteos"] },
-  { id: "administracion", titulo: "Administración", keys: ["usuarios", "configuracion"] },
+  // Administración oculta: Configuración accesible por URL directa (/configuracion).
 ];
 
 function modulosSyntheticFromMenu(): ModuloEmpresa[] {
@@ -597,8 +597,11 @@ export default function Sidebar() {
     const idForSlug = (slug: string) => modulos.find((m) => m.slug === slug)?.id ?? slug;
     const access = (slug: string) =>
       canAccessSidebarSlug(slug, slugs, esSuperAdmin, inactiveSlugsSet, { strict: strictAllowlist });
+    // Slugs de Administración: ocultos del sidebar (accesibles por URL directa).
+    const hiddenSlugs = new Set(["usuarios", "configuracion"]);
     return MENU_STRUCTURE.filter(
       (item) =>
+        !hiddenSlugs.has(item.slug) &&
         !favoritos.includes(idForSlug(item.slug)) &&
         access(item.slug) &&
         menuItemMatchesQuery(item, menuSearchQuery)

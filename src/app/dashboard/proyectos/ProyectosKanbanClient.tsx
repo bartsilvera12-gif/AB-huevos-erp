@@ -650,6 +650,8 @@ function ProjectCardView({
   const saasModulesLabel = saasModuleCountLabel(p);
   const priorityStyles = getPriorityCardStyles(p.prioridad);
   const pedido = readPedidoBrief(p.brief_data);
+  // Color del estado actual — se aplica al punto y a la franja izquierda.
+  const estadoColor = estados.find((e) => e.id === p.estado_id)?.color ?? null;
 
   const style: CSSProperties | undefined = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
@@ -662,7 +664,11 @@ function ProjectCardView({
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{
+        ...style,
+        // Franja izquierda con color del estado (sobrescribe la clase de prioridad).
+        ...(estadoColor ? { borderLeftColor: estadoColor } : {}),
+      }}
       {...attributes}
       {...listeners}
       className={`touch-none rounded-xl border border-l-4 bg-white p-2.5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
@@ -677,7 +683,10 @@ function ProjectCardView({
         }}
       >
         <div className="flex items-start gap-2">
-          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${priorityStyles.iconDotClass}`} />
+          <span
+            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${estadoColor ? "" : priorityStyles.iconDotClass}`}
+            style={estadoColor ? { backgroundColor: estadoColor } : undefined}
+          />
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold leading-snug text-slate-950 hover:underline">
               {p.titulo}
