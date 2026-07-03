@@ -3,20 +3,16 @@
  * Devuelve HTML con estilos inline para no depender del CSS de cada endpoint
  * (evita duplicar el markup del encabezado en cada documento).
  *
- * SOLO presentación: no toca datos de negocio. Los datos comerciales son fijos
- * de la empresa (Reserva Ecológica Caacupé S.A.).
+ * SOLO presentación: no toca datos de negocio.
  */
 
 export const EMPRESA_DOC = {
-  nombre: "Reserva Ecológica Caacupé S.A.",
-  actividad: [
-    "Comercio al por menor de otros productos en comercios no especializados",
-    "Venta de plantas, bancos, jardinería, otros",
-  ],
-  telefono: "(0971) 861 676",
-  direccion: ["200 mts. en Sur Club Costa Ñu", "Ruta Pyca - Caacupé", "Cordillera - Paraguay"],
-  /** Logo del cliente (alta calidad, sin fondo). Servido desde /public. */
-  logoUrl: "/brand/reservacaacupe-doc-logo.png",
+  nombre: "Aviagro",
+  actividad: [] as string[],
+  telefono: "",
+  direccion: [] as string[],
+  /** Logo del cliente. Servido desde /public. */
+  logoUrl: "/brand/aviagro-logo.jpeg",
 };
 
 function esc(v: unknown): string {
@@ -34,6 +30,11 @@ function esc(v: unknown): string {
 export function membreteA4(origin = ""): string {
   const e = EMPRESA_DOC;
   const logo = origin ? `${origin}${e.logoUrl}` : e.logoUrl;
+  const actividadHtml = e.actividad.length
+    ? e.actividad.map((a) => `<div style="color:#6b7280;">${esc(a)}</div>`).join("")
+    : "";
+  const telHtml = e.telefono ? `<div style="margin-top:4px;"><strong>Tel:</strong> ${esc(e.telefono)}</div>` : "";
+  const dirHtml = e.direccion.length ? `<div>${e.direccion.map(esc).join(" · ")}</div>` : "";
   return `
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:2px solid #2E7D32;padding-bottom:12px;margin-bottom:16px;">
     <div style="flex:0 0 auto;">
@@ -41,9 +42,9 @@ export function membreteA4(origin = ""): string {
     </div>
     <div style="flex:1;min-width:0;text-align:right;font-size:11px;color:#374151;line-height:1.55;">
       <div style="font-size:14px;font-weight:800;color:#1f2937;">${esc(e.nombre)}</div>
-      ${e.actividad.map((a) => `<div style="color:#6b7280;">${esc(a)}</div>`).join("")}
-      <div style="margin-top:4px;"><strong>Tel:</strong> ${esc(e.telefono)}</div>
-      <div>${e.direccion.map(esc).join(" · ")}</div>
+      ${actividadHtml}
+      ${telHtml}
+      ${dirHtml}
     </div>
   </div>`;
 }
@@ -54,12 +55,15 @@ export function membreteA4(origin = ""): string {
 export function membreteTicket(origin = ""): string {
   const e = EMPRESA_DOC;
   const logo = origin ? `${origin}${e.logoUrl}` : e.logoUrl;
+  const telHtml = e.telefono ? `<div style="font-size:10px;">Tel: ${esc(e.telefono)}</div>` : "";
+  const dirHtml = e.direccion.length
+    ? e.direccion.map((d) => `<div style="font-size:10px;">${esc(d)}</div>`).join("")
+    : "";
   return `
   <div style="text-align:center;padding-bottom:6px;margin-bottom:6px;border-bottom:1px dashed #000;">
     <img src="${esc(logo)}" alt="${esc(e.nombre)}" style="max-width:150px;max-height:72px;width:auto;height:auto;object-fit:contain;display:inline-block;margin:0 auto 4px;" />
     <div style="font-weight:700;font-size:12px;">${esc(e.nombre)}</div>
-    <div style="font-size:10px;">Tel: ${esc(e.telefono)}</div>
-    <div style="font-size:10px;">${esc(e.direccion[0])}</div>
-    <div style="font-size:10px;">${esc(e.direccion.slice(1).join(" · "))}</div>
+    ${telHtml}
+    ${dirHtml}
   </div>`;
 }
