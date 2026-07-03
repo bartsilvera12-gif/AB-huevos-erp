@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Reserva Ecológica Caacupé",
-  description: "Sistema de gestión Zentra — Reserva Ecológica Caacupé",
+  title: "Aviagro",
+  description: "Sistema de gestión Zentra — Aviagro",
 };
 
 export const viewport: Viewport = {
