@@ -613,9 +613,8 @@ export default function NuevaVentaPage() {
       // segunda pestaña puede ser bloqueada por el navegador → fallback con botones).
       try { window.open(ticketUrl, "_blank", "noopener"); } catch {}
       if (generaNota) { try { window.open(remisionUrl, "_blank", "noopener"); } catch {} }
-      // Panel post-venta: botones siempre disponibles aunque el popup se bloquee.
-      // NOTA: abrir el ticket / la nota / el panel NO vuelve a llamar saveVenta.
-      setPostVenta({ id: v.id, numero: v.numero_control, generaNota, credito: tipoVenta === "CREDITO" });
+      // Redirección directa a /ventas — el ticket ya se abrió en nueva pestaña.
+      router.push("/ventas");
     } finally {
       // Liberar el guard SIEMPRE: éxito, error o flujo de "confirmar sin stock".
       isSubmittingRef.current = false;
