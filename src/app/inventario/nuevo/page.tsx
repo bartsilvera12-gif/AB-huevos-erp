@@ -119,11 +119,11 @@ export default function NuevoProductoPage() {
         body: JSON.stringify({ nombre }),
       });
       const data = await res.json();
-      if (!res.ok) {
+      if (!res.ok || data?.success === false) {
         setCatModalError(data?.error ?? "No se pudo crear la categoría.");
         return;
       }
-      const nueva = data?.categoria ?? data;
+      const nueva = data?.data?.categoria ?? data?.categoria ?? data;
       if (nueva?.id) {
         setCategorias((prev) => [...prev, { id: nueva.id, nombre: nueva.nombre }].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         setCategoriaId(nueva.id);
@@ -152,11 +152,11 @@ export default function NuevoProductoPage() {
         body: JSON.stringify({ nombre }),
       });
       const data = await res.json();
-      if (!res.ok) {
+      if (!res.ok || data?.success === false) {
         setProvModalError(data?.error ?? "No se pudo crear el proveedor.");
         return;
       }
-      const nuevo = data?.proveedor ?? data;
+      const nuevo = data?.data?.proveedor ?? data?.proveedor ?? data;
       if (nuevo?.id) {
         setProveedores((prev) => [...prev, { id: nuevo.id, nombre: nuevo.nombre }].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         setProveedorId(nuevo.id);
