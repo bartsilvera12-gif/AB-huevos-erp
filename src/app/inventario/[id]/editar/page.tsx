@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import MontoInput from "@/components/ui/MontoInput";
 import { getProducto, productoExiste, updateProducto } from "@/lib/inventario/storage";
 import type { MetodoValuacion } from "@/lib/inventario/types";
@@ -386,6 +387,14 @@ export default function EditarProductoPage() {
   if (cargando) {
     return (
       <div className="space-y-8">
+        <button
+          type="button"
+          onClick={() => router.push("/inventario")}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a Inventario
+        </button>
         <h1 className="text-3xl font-bold text-gray-800">Editar producto</h1>
         <p className="text-gray-500 animate-pulse">Cargando…</p>
       </div>
@@ -399,6 +408,14 @@ export default function EditarProductoPage() {
   return (
     <div className="space-y-8">
       <div>
+        <button
+          type="button"
+          onClick={() => router.push("/inventario")}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 mb-3"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a Inventario
+        </button>
         <h1 className="text-3xl font-bold text-gray-800">Editar producto</h1>
         <p className="text-gray-600">Modifica los datos del producto</p>
       </div>

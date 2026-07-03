@@ -8,7 +8,7 @@ import SelectFromList from "@/components/inventario/SelectFromList";
 import { MargenPorCanal } from "@/components/inventario/MargenPorCanal";
 import { productoExiste, saveProducto } from "@/lib/inventario/storage";
 import type { MetodoValuacion } from "@/lib/inventario/types";
-import { ShoppingBag, Boxes, ClipboardList, type LucideIcon } from "lucide-react";
+import { ShoppingBag, Boxes, ClipboardList, ArrowLeft, type LucideIcon } from "lucide-react";
 
 // Opciones estándar de unidad de medida para gastro
 const UNIDADES_OPCIONES = [
@@ -475,6 +475,14 @@ export default function NuevoProductoPage() {
     return (
       <div className="space-y-8">
         <div>
+          <button
+            type="button"
+            onClick={() => router.push("/inventario")}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 mb-3"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Volver a Inventario
+          </button>
           <h1 className="text-3xl font-bold text-gray-800">Nuevo producto</h1>
           <p className="text-gray-600">¿Qué tipo de producto vas a cargar?</p>
         </div>
@@ -542,6 +550,14 @@ export default function NuevoProductoPage() {
     <div className="space-y-8">
 
       <div>
+        <button
+          type="button"
+          onClick={() => router.push("/inventario")}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 mb-3"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a Inventario
+        </button>
         <h1 className="text-3xl font-bold text-gray-800">Nuevo producto</h1>
       </div>
 
