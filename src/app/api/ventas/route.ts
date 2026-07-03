@@ -60,7 +60,10 @@ export async function GET(request: NextRequest) {
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const empresaId = ctx.auth.empresa_id;
 
-    const ventasQ = await ctx.supabase
+    // Intentar leer con columnas de anulación (nueva feature). Si la migración
+    // aún no se corrió (columnas no existen), fallback a la selección original
+    // para no romper el listado ni el alta de ventas.
+    let ventasQ = await ctx.supabase
       .from("ventas")
       .select(
         "id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva, total, tipo_venta, plazo_dias, metodo_pago, fecha, genera_nota_remision, nota_remision_numero, anulada, anulada_at, anulada_motivo"
@@ -68,7 +71,18 @@ export async function GET(request: NextRequest) {
       .eq("empresa_id", empresaId)
       .order("fecha", { ascending: false })
       .limit(500);
-    if (ventasQ.error) throw new Error(ventasQ.error.message);
+    if (ventasQ.error) {
+      // Fallback sin columnas de anulación
+      ventasQ = await ctx.supabase
+        .from("ventas")
+        .select(
+          "id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva, total, tipo_venta, plazo_dias, metodo_pago, fecha, genera_nota_remision, nota_remision_numero"
+        )
+        .eq("empresa_id", empresaId)
+        .order("fecha", { ascending: false })
+        .limit(500);
+      if (ventasQ.error) throw new Error(ventasQ.error.message);
+    }
 
     const itemsQ = await ctx.supabase
       .from("ventas_items")

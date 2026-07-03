@@ -304,9 +304,20 @@ export async function getReporteVentas(
   const tCli = quoteSchemaTable(schema, "clientes");
   const p = pool();
   const perV = `v.empresa_id=$1::uuid AND v.fecha>=$2::timestamptz AND v.fecha<=$3::timestamptz`;
-  // Filtro que excluye anuladas — usado en KPIs, no en el detalle.
-  const perVNoAnul = `${perV} AND COALESCE(v.anulada,false)=false`;
   const args = [empresaId, b.start, b.end];
+
+  // Detectar si la columna `anulada` ya existe (migración corrida). Si no existe,
+  // fallback: KPIs = todas las ventas, detalle sin badge.
+  const anuladaColQ = await p.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema=$1 AND table_name='ventas' AND column_name='anulada'
+     ) AS exists`,
+    [schema],
+  );
+  const hasAnulada = anuladaColQ.rows[0]?.exists === true;
+  const perVNoAnul = hasAnulada ? `${perV} AND COALESCE(v.anulada,false)=false` : perV;
+  const selAnulada = hasAnulada ? "COALESCE(v.anulada,false) AS anulada" : "false AS anulada";
 
   // Totales de cabecera (KPIs) — sin anuladas.
   const totQ = p.query<{ ventas: number; total: number }>(
@@ -327,11 +338,11 @@ export async function getReporteVentas(
        FROM ${tVI} vi JOIN ${tV} v ON v.id=vi.venta_id WHERE ${perVNoAnul}
       GROUP BY vi.producto_id, vi.producto_nombre ORDER BY total DESC`, args);
   // Detalle de ventas — incluye anuladas (marcadas).
-  const ventasQ = p.query<VentaReporteRow>(
+  const ventasQ = p.query<VentaReporteRow & { anulada: boolean }>(
     `SELECT v.id, v.numero_control, v.fecha, c.nombre AS cliente, v.metodo_pago,
             (SELECT count(*) FROM ${tVI} vi WHERE vi.venta_id=v.id)::int AS items_count,
             v.total::float8 AS total,
-            COALESCE(v.anulada,false) AS anulada
+            ${selAnulada}
        FROM ${tV} v
        LEFT JOIN ${tCli} c ON c.id=v.cliente_id AND c.empresa_id=v.empresa_id
       WHERE ${perV} ORDER BY v.fecha DESC, v.numero_control DESC`, args);
