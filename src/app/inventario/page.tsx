@@ -49,7 +49,10 @@ export default function InventarioPage() {
   const { isAdmin } = useIsAdmin();
   const [todos, setTodos] = useState<Producto[]>([]);
   const [ubicaciones, setUbicaciones] = useState<UbicacionMin[]>([]);
+  const [categorias, setCategorias] = useState<{ id: string; nombre: string }[]>([]);
+  const [filtroCategoria, setFiltroCategoria] = useState<string>(""); // "", "__sin__" o id
   const [refreshKey, setRefreshKey] = useState(0);
+  const [borrandoId, setBorrandoId] = useState<string | null>(null);
 
   // Filtros por columna
   const [filtroPorNombre,  setFiltroPorNombre]  = useState("");
@@ -81,8 +84,40 @@ export default function InventarioPage() {
         setUbicaciones((j.data?.ubicaciones ?? []) as UbicacionMin[]);
       })
       .catch(() => undefined);
+    // Categorías para el filtro
+    fetch("/api/inventario/categorias", { credentials: "include", cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled || !j?.success) return;
+        const rows = (j.data?.categorias ?? []) as { id: string; nombre: string }[];
+        setCategorias(rows.map((c) => ({ id: c.id, nombre: c.nombre })));
+      })
+      .catch(() => undefined);
     return () => { cancelled = true; };
   }, [refreshKey]);
+
+  async function borrarProducto(id: string, nombre: string) {
+    if (borrandoId) return;
+    const ok = window.confirm(`¿Borrar el producto "${nombre}"?\nEsta acción no se puede deshacer.`);
+    if (!ok) return;
+    setBorrandoId(id);
+    try {
+      const r = await fetch(`/api/productos/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.success === false) {
+        window.alert(j?.error ?? "No se pudo borrar el producto.");
+        return;
+      }
+      setTodos((prev) => prev.filter((p) => p.id !== id));
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Error de red.");
+    } finally {
+      setBorrandoId(null);
+    }
+  }
 
   // Map se reconstruia en cada render del componente (cualquier setState de
   // filtro): O(N) basura por keystroke. useMemo lo cachea hasta que cambia ubicaciones.
@@ -133,6 +168,13 @@ export default function InventarioPage() {
       if (p.ubicacion_principal_id !== filtroUbicacion) return false;
     }
 
+    // Categoría principal
+    if (filtroCategoria === "__sin__") {
+      if (p.categoria_principal_id) return false;
+    } else if (filtroCategoria !== "") {
+      if (p.categoria_principal_id !== filtroCategoria) return false;
+    }
+
     // Solo stock bajo
     if (soloStockBajo && p.stock_actual > p.stock_minimo) return false;
 
@@ -169,6 +211,7 @@ export default function InventarioPage() {
     filtroPorPrecio,
     filtroValuacion,
     filtroUbicacion,
+    filtroCategoria,
     soloStockBajo,
     filtroTipo,
     tab,
@@ -294,6 +337,18 @@ export default function InventarioPage() {
               onChange={(e) => setFiltroPorNombre(e.target.value)}
               className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none sm:w-64 sm:flex-none"
             />
+            <select
+              value={filtroCategoria}
+              onChange={(e) => setFiltroCategoria(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0EA5E9]"
+              title="Filtrar por categoría"
+            >
+              <option value="">Todas las categorías</option>
+              <option value="__sin__">Sin categoría</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -506,12 +561,22 @@ export default function InventarioPage() {
                       </td>
                     )}
                     <td className="py-4 pl-4 text-center">
-                      <Link
-                        href={`/inventario/${p.id}/editar`}
-                        className="inline-flex items-center justify-center min-h-[40px] rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
-                      >
-                        Editar
-                      </Link>
+                      <div className="inline-flex items-center gap-2">
+                        <Link
+                          href={`/inventario/${p.id}/editar`}
+                          className="inline-flex items-center justify-center min-h-[40px] rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                        >
+                          Editar
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => borrarProducto(p.id, p.nombre)}
+                          disabled={borrandoId === p.id}
+                          className="inline-flex items-center justify-center min-h-[40px] rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:border-rose-300 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                        >
+                          {borrandoId === p.id ? "…" : "Borrar"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

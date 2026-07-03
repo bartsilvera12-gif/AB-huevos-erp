@@ -241,3 +241,45 @@ export async function PATCH(
     return NextResponse.json(errorResponse("No se pudo actualizar el producto."), { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  ctxParams: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await ctxParams.params;
+    const ctx = await getTenantSupabaseFromAuth(request);
+    if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
+    const empresaId = ctx.auth.empresa_id;
+    const sb = ctx.supabase;
+
+    const exists = await sb
+      .from("productos")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("id", id)
+      .maybeSingle();
+    if (exists.error) throw new Error(exists.error.message);
+    if (!exists.data) return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
+
+    const { error } = await sb
+      .from("productos")
+      .delete()
+      .eq("empresa_id", empresaId)
+      .eq("id", id);
+    if (error) {
+      const msg = error.message ?? "";
+      if (/foreign key|violates|referenced/i.test(msg)) {
+        return NextResponse.json(
+          errorResponse("No se puede borrar: el producto tiene movimientos, ventas o compras asociadas."),
+          { status: 409 }
+        );
+      }
+      throw new Error(msg);
+    }
+    return NextResponse.json(successResponse({ id }));
+  } catch (err) {
+    console.error("[/api/productos/[id] DELETE]", err instanceof Error ? err.message : err);
+    return NextResponse.json(errorResponse("No se pudo borrar el producto."), { status: 500 });
+  }
+}
