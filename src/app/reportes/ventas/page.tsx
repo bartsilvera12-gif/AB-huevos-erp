@@ -105,13 +105,22 @@ export default function VentasReportePage() {
                   </thead>
                   <tbody>
                     {data.ventas.map((v) => (
-                      <tr key={v.id} className="border-b border-slate-100 last:border-0">
+                      <tr key={v.id} className={`border-b border-slate-100 last:border-0 ${v.anulada ? "opacity-60" : ""}`}>
                         <td className="py-3 pr-4 text-slate-600 text-xs tabular-nums">{formatFecha(v.fecha)}</td>
-                        <td className="py-3 pr-4 font-mono text-xs text-slate-500">{v.numero_control}</td>
+                        <td className="py-3 pr-4 font-mono text-xs text-slate-500">
+                          <div className="flex items-center gap-2">
+                            <span className={v.anulada ? "line-through" : ""}>{v.numero_control}</span>
+                            {v.anulada && (
+                              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700">
+                                Anulada
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-3 pr-4 text-slate-700">{v.cliente ?? "—"}</td>
                         <td className="py-3 pr-4 text-slate-600 capitalize">{v.metodo_pago ?? "—"}</td>
                         <td className="py-3 pr-4 text-right tabular-nums text-slate-700">{v.items_count}</td>
-                        <td className="py-3 text-right tabular-nums font-semibold text-slate-800">{formatGs(v.total)}</td>
+                        <td className={`py-3 text-right tabular-nums font-semibold ${v.anulada ? "text-slate-400 line-through" : "text-slate-800"}`}>{formatGs(v.total)}</td>
                       </tr>
                     ))}
                   </tbody>

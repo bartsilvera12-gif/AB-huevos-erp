@@ -123,6 +123,7 @@ export interface VentaReporteRow {
   metodo_pago: string | null;
   items_count: number;
   total: number;
+  anulada?: boolean;
 }
 
 /** Una línea de venta. tipo_precio nunca null en la salida (null → 'minorista'). */

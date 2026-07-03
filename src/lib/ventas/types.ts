@@ -48,4 +48,9 @@ export interface Venta {
   nota_remision_numero?: string | null;
 
   fecha: string;             // ISO string, generado automáticamente
+
+  /** Anulación (soft): la venta se contabiliza pero no cuenta en KPIs de venta neta. */
+  anulada?: boolean;
+  anulada_at?: string | null;
+  anulada_motivo?: string | null;
 }

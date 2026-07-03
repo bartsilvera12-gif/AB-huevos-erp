@@ -148,6 +148,38 @@ export default function VentasPage() {
   const [busqueda,   setBusqueda]   = useState("");
   const [filtroTipo, setFiltroTipo] = useState<TipoVenta | "">("");
   const [filtroIva,  setFiltroIva]  = useState<TipoIvaVenta | "">("");
+  const [confirmarAnular, setConfirmarAnular] = useState<{ id: string; numero: string } | null>(null);
+  const [anularMotivo, setAnularMotivo] = useState("");
+  const [anulando, setAnulando] = useState(false);
+  const [errorAnular, setErrorAnular] = useState<string | null>(null);
+
+  async function ejecutarAnulacion() {
+    if (!confirmarAnular) return;
+    setAnulando(true);
+    setErrorAnular(null);
+    try {
+      const r = await fetch(`/api/ventas/${encodeURIComponent(confirmarAnular.id)}/anular`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ motivo: anularMotivo.trim() || null }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.success === false) {
+        setErrorAnular(j?.error ?? "No se pudo anular la venta.");
+        return;
+      }
+      setTodas((prev) => prev.map((v) =>
+        v.id === confirmarAnular.id ? { ...v, anulada: true, anulada_at: new Date().toISOString(), anulada_motivo: anularMotivo.trim() || null } : v
+      ));
+      setConfirmarAnular(null);
+      setAnularMotivo("");
+    } catch (e) {
+      setErrorAnular(e instanceof Error ? e.message : "Error de red.");
+    } finally {
+      setAnulando(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -339,9 +371,16 @@ export default function VentasPage() {
                 filtradas.map((v) => {
                   const cantTotal = v.items.reduce((s, i) => s + i.cantidad, 0);
                   return (
-                    <tr key={v.id} className="border-b border-slate-200 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors">
+                    <tr key={v.id} className={`border-b border-slate-200 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors ${v.anulada ? "opacity-60" : ""}`}>
                       <td className="py-4 pr-4 font-mono text-xs text-gray-500 align-middle">
-                        {v.numero_control}
+                        <div className="flex items-center gap-2">
+                          <span className={v.anulada ? "line-through" : ""}>{v.numero_control}</span>
+                          {v.anulada && (
+                            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700">
+                              Anulada
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 pr-4 align-middle">
                         <ResumenProductos v={v} />
@@ -400,6 +439,16 @@ export default function VentasPage() {
                               Nota de remisión
                             </a>
                           )}
+                          {!v.anulada && (
+                            <button
+                              type="button"
+                              onClick={() => { setErrorAnular(null); setAnularMotivo(""); setConfirmarAnular({ id: v.id, numero: v.numero_control }); }}
+                              className="inline-flex items-center justify-center rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:border-rose-300 hover:bg-rose-50 transition-colors"
+                              title="Anular venta y revertir stock"
+                            >
+                              Anular
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -414,6 +463,62 @@ export default function VentasPage() {
 
       {/* FAB mobile: acceso 1-tap a "+ Nueva venta" desde cualquier scroll position */}
       <MobileFab href="/ventas/nueva" label="Nueva venta" />
+
+      {confirmarAnular && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm"
+          onClick={() => !anulando && setConfirmarAnular(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-semibold text-slate-900">Anular venta</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Vas a anular <span className="font-semibold text-slate-900">{confirmarAnular.numero}</span>. El stock de los productos vendidos se va a reponer y la venta quedará marcada como <span className="font-semibold">Anulada</span> en el listado y en reportes.
+                </p>
+                <label className="mt-3 block text-xs font-medium text-slate-600">Motivo (opcional)</label>
+                <textarea
+                  value={anularMotivo}
+                  onChange={(e) => setAnularMotivo(e.target.value)}
+                  disabled={anulando}
+                  rows={2}
+                  placeholder="Ej: cliente devolvió el pedido"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                />
+                {errorAnular && (
+                  <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    {errorAnular}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmarAnular(null)}
+                disabled={anulando}
+                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={ejecutarAnulacion}
+                disabled={anulando}
+                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50"
+              >
+                {anulando ? "Anulando…" : "Anular venta"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
