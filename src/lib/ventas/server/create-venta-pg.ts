@@ -528,8 +528,7 @@ export async function createVentaTransaccionalPg(
         .maybeSingle();
       if (tipoQ.error || estadoQ.error || !tipoQ.data || !estadoQ.data) {
         console.warn("[createVenta] pedido skip — falta proyecto_tipos.pedido o proyecto_estados.nuevo");
-        return { ventaId, numeroControl, fechaIso, notaRemisionNumero, cuentaPorCobrarId };
-      }
+      } else {
       const tipoId = (tipoQ.data as { id: string }).id;
       const estadoId = (estadoQ.data as { id: string }).id;
 
@@ -584,6 +583,7 @@ export async function createVentaTransaccionalPg(
         metadata,
       });
       if (insProy.error) throw new Error(insProy.error.message);
+      }
     }
 
     // 9) Cuenta por cobrar (solo CRÉDITO con cliente). El saldo inicial = total de la venta;
