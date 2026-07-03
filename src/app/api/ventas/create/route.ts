@@ -184,6 +184,19 @@ export async function POST(request: NextRequest) {
       };
     }
 
+    // Toda venta genera una tarjeta en el tablero de Pedidos.
+    // Si el frontend no envía `pedido_cocina`, se usa modalidad 'local' por defecto.
+    if (!pedidoCocina) {
+      pedidoCocina = {
+        modalidad: "local",
+        mesa: null,
+        cliente_nombre: null,
+        cliente_telefono: null,
+        direccion_entrega: null,
+        observacion: null,
+      };
+    }
+
     const subtotalDeclarado = Number(o.subtotal);
     const montoIvaDeclarado = Number(o.monto_iva);
     const totalDeclarado = Number(o.total);

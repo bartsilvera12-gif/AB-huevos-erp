@@ -508,7 +508,7 @@ export async function createVentaTransaccionalPg(
       if (mov.error) throw new Error(mov.error.message);
     }
 
-    // 8) Pedido cocina (tarjeta en proyectos)
+    // 8) Pedido cocina (tarjeta en proyectos) — no fatal: si falta setup, se salta.
     if (params.pedidoCocina) {
       const tipoQ = await sb
         .from("proyecto_tipos")
@@ -518,10 +518,6 @@ export async function createVentaTransaccionalPg(
         .eq("activo", true)
         .limit(1)
         .maybeSingle();
-      if (tipoQ.error) throw new Error(tipoQ.error.message);
-      if (!tipoQ.data) throw new Error("Tipo de proyecto 'pedido' no configurado para esta empresa.");
-      const tipoId = (tipoQ.data as { id: string }).id;
-
       const estadoQ = await sb
         .from("proyecto_estados")
         .select("id")
@@ -530,8 +526,11 @@ export async function createVentaTransaccionalPg(
         .eq("activo", true)
         .limit(1)
         .maybeSingle();
-      if (estadoQ.error) throw new Error(estadoQ.error.message);
-      if (!estadoQ.data) throw new Error("Estado 'nuevo' no configurado para esta empresa.");
+      if (tipoQ.error || estadoQ.error || !tipoQ.data || !estadoQ.data) {
+        console.warn("[createVenta] pedido skip — falta proyecto_tipos.pedido o proyecto_estados.nuevo");
+        return { ventaId, numeroControl, fechaIso, notaRemisionNumero, cuentaPorCobrarId };
+      }
+      const tipoId = (tipoQ.data as { id: string }).id;
       const estadoId = (estadoQ.data as { id: string }).id;
 
       const itemsSnapshot = items.map((it) => ({
