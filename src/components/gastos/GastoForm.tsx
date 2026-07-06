@@ -22,6 +22,9 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [frecModalOpen, setFrecModalOpen] = useState(false);
+  const [frecModalValue, setFrecModalValue] = useState("");
+  const [frecModalError, setFrecModalError] = useState<string | null>(null);
   const [form, setForm] = useState<GastoInput>({
     categoria: gasto?.categoria ?? "",
     descripcion: gasto?.descripcion ?? "",
@@ -164,12 +167,7 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
                 </select>
                 <button
                   type="button"
-                  onClick={() => {
-                    const custom = window.prompt("Nueva frecuencia (ej: QUINCENAL, TRIMESTRAL):");
-                    if (custom && custom.trim()) {
-                      setForm((prev) => ({ ...prev, frecuencia: custom.trim().toUpperCase() }));
-                    }
-                  }}
+                  onClick={() => { setFrecModalError(null); setFrecModalValue(""); setFrecModalOpen(true); }}
                   className="shrink-0 rounded-md border border-sky-200 bg-white px-3 text-xs font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50 transition-colors"
                 >
                   + Otra
@@ -207,6 +205,65 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
           Cancelar
         </button>
       </div>
+
+      {frecModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm"
+          onClick={() => setFrecModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-slate-900">Nueva frecuencia</h3>
+            <p className="mt-1 text-sm text-slate-500">Definí una frecuencia personalizada para este gasto recurrente.</p>
+            <div className="mt-4">
+              <label className="text-xs font-medium text-slate-600">Nombre</label>
+              <input
+                type="text"
+                autoFocus
+                value={frecModalValue}
+                onChange={(e) => setFrecModalValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const v = frecModalValue.trim().toUpperCase();
+                    if (!v) { setFrecModalError("Ingresá un nombre."); return; }
+                    setForm((prev) => ({ ...prev, frecuencia: v }));
+                    setFrecModalOpen(false);
+                  }
+                }}
+                placeholder="Ej: QUINCENAL, TRIMESTRAL"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              />
+              {frecModalError && (
+                <p className="mt-2 text-xs text-rose-600">{frecModalError}</p>
+              )}
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setFrecModalOpen(false)}
+                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const v = frecModalValue.trim().toUpperCase();
+                  if (!v) { setFrecModalError("Ingresá un nombre."); return; }
+                  setForm((prev) => ({ ...prev, frecuencia: v }));
+                  setFrecModalOpen(false);
+                }}
+                className="rounded-md bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-700"
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
