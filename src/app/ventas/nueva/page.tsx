@@ -143,6 +143,67 @@ export default function NuevaVentaPage() {
   const [clienteQuery, setClienteQuery] = useState("");
   const [clienteOpen, setClienteOpen] = useState(false);
   const clienteContainerRef = useRef<HTMLDivElement>(null);
+
+  // Modal rápido: crear cliente sin salir de la venta.
+  const [clienteModalOpen, setClienteModalOpen] = useState(false);
+  const [clienteModalNombre, setClienteModalNombre] = useState("");
+  const [clienteModalRuc, setClienteModalRuc] = useState("");
+  const [clienteModalTelefono, setClienteModalTelefono] = useState("");
+  const [clienteModalSaving, setClienteModalSaving] = useState(false);
+  const [clienteModalError, setClienteModalError] = useState<string | null>(null);
+
+  async function crearClienteRapido() {
+    const nombre = clienteModalNombre.trim();
+    if (!nombre) {
+      setClienteModalError("Ingresá un nombre.");
+      return;
+    }
+    setClienteModalSaving(true);
+    setClienteModalError(null);
+    try {
+      const res = await fetch("/api/clientes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          nombre_contacto: nombre,
+          empresa: nombre,
+          ruc: clienteModalRuc.trim() || null,
+          telefono: clienteModalTelefono.trim() || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success === false) {
+        setClienteModalError(data?.error ?? "No se pudo crear el cliente.");
+        return;
+      }
+      const nuevo = data?.data?.cliente ?? data?.data ?? data?.cliente ?? data;
+      const nuevoId = nuevo?.id ? String(nuevo.id) : "";
+      if (!nuevoId) {
+        setClienteModalError("Respuesta inesperada del servidor.");
+        return;
+      }
+      const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+      const lite: ClienteLite = {
+        id: nuevoId,
+        label: s(nuevo.empresa) || s(nuevo.nombre_contacto) || nombre,
+        ruc: s(nuevo.ruc) || null,
+        usa_nota_remision: nuevo.usa_nota_remision === true,
+      };
+      setClientes((prev) => [lite, ...prev]);
+      setClienteId(lite.id);
+      setClienteQuery("");
+      setClienteOpen(false);
+      setClienteModalOpen(false);
+      setClienteModalNombre("");
+      setClienteModalRuc("");
+      setClienteModalTelefono("");
+    } catch (e) {
+      setClienteModalError(e instanceof Error ? e.message : "Error de red.");
+    } finally {
+      setClienteModalSaving(false);
+    }
+  }
   // Nota de remisión: activada si el cliente la usa; toggle manual solo con cliente.
   const [generaNotaRemision, setGeneraNotaRemision] = useState(false);
 
@@ -714,9 +775,18 @@ export default function NuevaVentaPage() {
                   )}
                 </div>
               )}
-              <p className="mt-1 text-[11px] text-gray-400">
-                Si no seleccionás cliente, la venta se registra sin cliente.
-              </p>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className="text-[11px] text-gray-400">
+                  Si no seleccionás cliente, la venta se registra sin cliente.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setClienteModalError(null); setClienteModalOpen(true); }}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-sky-200 px-2.5 py-1 text-xs font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50 transition-colors"
+                >
+                  + Nuevo cliente
+                </button>
+              </div>
 
               {/* Nota de remisión: solo con cliente. Si el cliente la usa, viene activada. */}
               {clienteSel && (
@@ -1165,6 +1235,83 @@ export default function NuevaVentaPage() {
                 className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
               >
                 Ir a ventas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clienteModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm"
+          onClick={() => !clienteModalSaving && setClienteModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-slate-900">Nuevo cliente</h3>
+            <p className="mt-1 text-sm text-slate-500">Se crea y queda seleccionado en esta venta.</p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-600">Nombre / Razón social *</label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={clienteModalNombre}
+                  onChange={(e) => setClienteModalNombre(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && clienteModalNombre.trim()) { e.preventDefault(); void crearClienteRapido(); } }}
+                  placeholder="Ej: JUAN PÉREZ o EMPRESA S.A."
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  disabled={clienteModalSaving}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-600">RUC / CI (opcional)</label>
+                  <input
+                    type="text"
+                    value={clienteModalRuc}
+                    onChange={(e) => setClienteModalRuc(e.target.value)}
+                    placeholder="Ej: 800xxxx-x"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Teléfono (opcional)</label>
+                  <input
+                    type="text"
+                    value={clienteModalTelefono}
+                    onChange={(e) => setClienteModalTelefono(e.target.value)}
+                    placeholder="Ej: 0981 000000"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
+              </div>
+              {clienteModalError && (
+                <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  {clienteModalError}
+                </div>
+              )}
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setClienteModalOpen(false)}
+                disabled={clienteModalSaving}
+                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={crearClienteRapido}
+                disabled={clienteModalSaving}
+                className="rounded-md bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
+              >
+                {clienteModalSaving ? "Guardando…" : "Crear cliente"}
               </button>
             </div>
           </div>
