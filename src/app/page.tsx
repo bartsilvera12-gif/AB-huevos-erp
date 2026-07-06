@@ -1662,25 +1662,25 @@ const DashInventario = memo(function DashInventario({
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {criticos.map(p => (
-                    <tr key={p.id} className={`${p.stock_actual <= 0 ? "bg-red-50/40 dark:bg-red-900/10" : "bg-amber-50/30 dark:bg-amber-900/10"} hover:bg-opacity-80 transition-colors`}>
+                    <tr key={p.id} className={`${p.stock_actual <= 0 ? "bg-red-50/40" : "bg-amber-50/30"} hover:bg-opacity-80 transition-colors`}>
                       <td className="px-3 py-2.5">
                         <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
                       </td>
-                      <td className="px-3 py-2.5 text-sm font-semibold text-slate-900 dark:text-white">{p.nombre}</td>
+                      <td className="px-3 py-2.5 text-sm font-semibold !text-slate-900">{p.nombre}</td>
                       <td className="px-3 py-2.5">
-                        <span className={`text-sm font-bold tabular-nums ${p.stock_actual <= 0 ? "text-red-700 dark:text-red-300" : "text-amber-700 dark:text-amber-300"}`}>
+                        <span className={`text-sm font-bold tabular-nums ${p.stock_actual <= 0 ? "!text-red-700" : "!text-amber-700"}`}>
                           {p.stock_actual} {p.unidad_medida}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 tabular-nums">{p.stock_minimo} {p.unidad_medida}</td>
+                      <td className="px-3 py-2.5 text-sm !text-slate-800 tabular-nums">{p.stock_minimo} {p.unidad_medida}</td>
                       <td className="px-3 py-2.5">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          p.stock_actual <= 0 ? "bg-[var(--badge-error-bg)] text-[var(--badge-error-text)]" : "bg-[var(--badge-warning-bg)] text-[var(--badge-warning-text)]"
+                          p.stock_actual <= 0 ? "bg-red-100 !text-red-800" : "bg-amber-100 !text-amber-800"
                         }`}>
                           {p.stock_actual <= 0 ? "Crítico" : "Bajo"}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200">{proveedorMap[String(p.id)] ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-sm !text-slate-800">{proveedorMap[String(p.id)] ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1712,15 +1712,15 @@ const DashInventario = memo(function DashInventario({
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {topPorValor.map(p => (
-                  <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-3 py-2.5">
                       <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
                     </td>
-                    <td className="px-3 py-2.5 text-sm font-semibold text-slate-900 dark:text-white">{p.nombre}</td>
-                    <td className="px-3 py-2.5 font-mono text-sm text-slate-700 dark:text-slate-200">{p.sku}</td>
-                    <td className="px-3 py-2.5 text-sm tabular-nums font-medium text-slate-900 dark:text-slate-100">{p.stock_actual}</td>
-                    <td className="px-3 py-2.5 text-sm tabular-nums text-slate-700 dark:text-slate-200">Gs. {formatGs(p.costo_promedio)}</td>
-                    <td className="px-3 py-2.5 text-sm tabular-nums font-bold text-slate-900 dark:text-white">Gs. {formatGs(p.valor)}</td>
+                    <td className="px-3 py-2.5 text-sm font-semibold !text-slate-900">{p.nombre}</td>
+                    <td className="px-3 py-2.5 font-mono text-sm !text-slate-800">{p.sku}</td>
+                    <td className="px-3 py-2.5 text-sm tabular-nums font-medium !text-slate-900">{p.stock_actual}</td>
+                    <td className="px-3 py-2.5 text-sm tabular-nums !text-slate-800">Gs. {formatGs(p.costo_promedio)}</td>
+                    <td className="px-3 py-2.5 text-sm tabular-nums font-bold !text-slate-900">Gs. {formatGs(p.valor)}</td>
                   </tr>
                 ))}
               </tbody>
