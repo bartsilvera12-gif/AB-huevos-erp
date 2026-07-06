@@ -10,6 +10,7 @@ import { hoyAsuncionYmd } from "@/lib/fecha/asuncion";
 const fLabel = "block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1";
 const fInput =
   "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0EA5E9] bg-white";
+const FRECUENCIAS_PREDEFINIDAS = ["DIARIA", "SEMANAL", "MENSUAL", "ANUAL"];
 
 type Props = {
   gasto?: Gasto | null;
@@ -142,14 +143,38 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
           {form.recurrente && (
             <div>
               <label className={fLabel}>Frecuencia</label>
-              <input
-                type="text"
-                name="frecuencia"
-                value={form.frecuencia ?? ""}
-                onChange={handleChange}
-                placeholder="Ej: Mensual, Semanal"
-                className={fInput}
-              />
+              <div className="flex gap-2">
+                <select
+                  name="frecuencia"
+                  value={FRECUENCIAS_PREDEFINIDAS.includes(form.frecuencia ?? "") ? (form.frecuencia ?? "") : (form.frecuencia ? "__custom__" : "")}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") return;
+                    setForm((prev) => ({ ...prev, frecuencia: e.target.value }));
+                  }}
+                  className={fInput}
+                >
+                  <option value="">Elegí una frecuencia…</option>
+                  <option value="DIARIA">Diaria</option>
+                  <option value="SEMANAL">Semanal</option>
+                  <option value="MENSUAL">Mensual</option>
+                  <option value="ANUAL">Anual</option>
+                  {form.frecuencia && !FRECUENCIAS_PREDEFINIDAS.includes(form.frecuencia) && (
+                    <option value="__custom__">{form.frecuencia}</option>
+                  )}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const custom = window.prompt("Nueva frecuencia (ej: QUINCENAL, TRIMESTRAL):");
+                    if (custom && custom.trim()) {
+                      setForm((prev) => ({ ...prev, frecuencia: custom.trim().toUpperCase() }));
+                    }
+                  }}
+                  className="shrink-0 rounded-md border border-sky-200 bg-white px-3 text-xs font-medium text-sky-700 hover:border-sky-300 hover:bg-sky-50 transition-colors"
+                >
+                  + Otra
+                </button>
+              </div>
             </div>
           )}
           <div>

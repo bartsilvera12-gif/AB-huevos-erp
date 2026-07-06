@@ -84,26 +84,27 @@ export async function getGastosMesActual(): Promise<Gasto[]> {
 export async function createGasto(input: GastoInput): Promise<Gasto> {
   if (input.monto <= 0) throw new Error("El monto debe ser mayor a 0");
 
-  const supabase = await getBrowserSupabaseForEmpresaData();
-  const empresa_id = await getEmpresaId();
-
-  const { data, error } = await supabase
-    .from("gastos")
-    .insert({
-      empresa_id,
-      categoria: input.categoria.trim() || null,
-      descripcion: input.descripcion.trim() || null,
+  // Usa la API server-side (service role) para evitar problemas de RLS del cliente.
+  const res = await fetch("/api/gastos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      categoria: input.categoria,
+      descripcion: input.descripcion,
       monto: input.monto,
       tipo: input.tipo,
       recurrente: input.recurrente,
-      frecuencia: input.frecuencia?.trim() || null,
+      frecuencia: input.frecuencia ?? null,
       fecha: input.fecha,
-    })
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return mapRow(data as Record<string, unknown>);
+    }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j?.success === false) {
+    throw new Error(j?.error ?? "No se pudo crear el gasto");
+  }
+  const row = j?.data?.gasto ?? j?.data ?? j;
+  return mapRow(row as Record<string, unknown>);
 }
 
 export async function updateGasto(id: string, input: Partial<GastoInput>): Promise<Gasto> {
