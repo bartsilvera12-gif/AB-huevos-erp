@@ -128,10 +128,10 @@ export default function GastosPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5">
-                    <div className="flex gap-2">
+                    <div className="inline-flex items-center gap-2">
                       <Link
                         href={`/gastos/${g.id}/editar`}
-                        className="inline-flex items-center min-h-[40px] text-xs text-gray-500 hover:text-gray-800 underline"
+                        className="inline-flex items-center justify-center min-h-[36px] rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
                       >
                         Editar
                       </Link>
@@ -139,9 +139,9 @@ export default function GastosPage() {
                         type="button"
                         onClick={() => handleEliminar(g)}
                         disabled={eliminando === g.id}
-                        className="inline-flex items-center min-h-[40px] text-xs text-red-500 hover:text-red-700 underline disabled:opacity-50"
+                        className="inline-flex items-center justify-center min-h-[36px] rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:border-rose-300 hover:bg-rose-50 transition-colors disabled:opacity-50"
                       >
-                        {eliminando === g.id ? "…" : "Eliminar"}
+                        {eliminando === g.id ? "…" : "Borrar"}
                       </button>
                     </div>
                   </td>
