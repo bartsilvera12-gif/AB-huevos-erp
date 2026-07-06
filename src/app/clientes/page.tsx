@@ -289,6 +289,49 @@ export default function ClientesPage() {
   const [columnasInicializadas, setColumnasInicializadas] = useState(false);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<ClienteColumnKey[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
   const [filasTipoCatalogo, setFilasTipoCatalogo] = useState<ClienteTipoServicioRow[]>(() => filasTiposDesdeSistemaEstatico());
+  const [confirmarBorrar, setConfirmarBorrar] = useState<{ id: string; nombre: string } | null>(null);
+  const [motivoBorrar, setMotivoBorrar] = useState("");
+  const [cancelarSuscripciones, setCancelarSuscripciones] = useState(false);
+  const [anularFacturas, setAnularFacturas] = useState(false);
+  const [borrando, setBorrando] = useState(false);
+  const [errorBorrar, setErrorBorrar] = useState<string | null>(null);
+
+  async function ejecutarBorradoCliente() {
+    if (!confirmarBorrar) return;
+    const motivo = motivoBorrar.trim();
+    if (!motivo) {
+      setErrorBorrar("El motivo de eliminación es obligatorio.");
+      return;
+    }
+    setBorrando(true);
+    setErrorBorrar(null);
+    try {
+      const r = await fetch(`/api/clientes/${encodeURIComponent(confirmarBorrar.id)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          deletion_reason: motivo,
+          cancelar_suscripciones: cancelarSuscripciones,
+          anular_facturas_pendientes: anularFacturas,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.success === false) {
+        setErrorBorrar(j?.error ?? "No se pudo borrar el cliente.");
+        return;
+      }
+      setClientes((prev) => prev.filter((c) => c.id !== confirmarBorrar.id));
+      setConfirmarBorrar(null);
+      setMotivoBorrar("");
+      setCancelarSuscripciones(false);
+      setAnularFacturas(false);
+    } catch (e) {
+      setErrorBorrar(e instanceof Error ? e.message : "Error de red.");
+    } finally {
+      setBorrando(false);
+    }
+  }
   const mapNombreTipo = useMemo(() => {
     const m: Record<string, string> = {};
     for (const t of filasTipoCatalogo) m[t.slug] = t.nombre;
@@ -590,6 +633,7 @@ export default function ClientesPage() {
                       {col.label}
                     </th>
                   ))}
+                  <th className="py-3 pr-4 pl-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">Acción</th>
                 </tr>
               </thead>
               <tbody>
@@ -604,6 +648,21 @@ export default function ClientesPage() {
                         {col.render(c)}
                       </td>
                     ))}
+                    <td className="py-4 pr-4 pl-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setErrorBorrar(null);
+                          setMotivoBorrar("");
+                          setCancelarSuscripciones(false);
+                          setAnularFacturas(false);
+                          setConfirmarBorrar({ id: c.id, nombre: clienteNombre(c) });
+                        }}
+                        className="inline-flex items-center rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:border-rose-300 hover:bg-rose-50 transition-colors"
+                      >
+                        Borrar
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -613,6 +672,86 @@ export default function ClientesPage() {
       </div>
 
       <MobileFab href="/clientes/nuevo" label="Nuevo cliente" />
+
+      {confirmarBorrar && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm"
+          onClick={() => !borrando && setConfirmarBorrar(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-semibold text-slate-900">Borrar cliente</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Vas a borrar <span className="font-semibold text-slate-900">&quot;{confirmarBorrar.nombre}&quot;</span>. Esta acción no se puede deshacer.
+                </p>
+                <label className="mt-3 block text-xs font-medium text-slate-600">Motivo <span className="text-rose-600">*</span></label>
+                <textarea
+                  value={motivoBorrar}
+                  onChange={(e) => setMotivoBorrar(e.target.value)}
+                  disabled={borrando}
+                  rows={2}
+                  placeholder="Ej: duplicado, dato erróneo, baja definitiva"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                />
+
+                <div className="mt-3 space-y-1.5">
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={cancelarSuscripciones}
+                      onChange={(e) => setCancelarSuscripciones(e.target.checked)}
+                      disabled={borrando}
+                      className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                    />
+                    Cancelar suscripciones activas del cliente
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={anularFacturas}
+                      onChange={(e) => setAnularFacturas(e.target.checked)}
+                      disabled={borrando}
+                      className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                    />
+                    Anular facturas pendientes de cobro
+                  </label>
+                </div>
+
+                {errorBorrar && (
+                  <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    {errorBorrar}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmarBorrar(null)}
+                disabled={borrando}
+                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={ejecutarBorradoCliente}
+                disabled={borrando}
+                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50"
+              >
+                {borrando ? "Borrando…" : "Borrar cliente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
