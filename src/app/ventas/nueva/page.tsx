@@ -145,17 +145,43 @@ export default function NuevaVentaPage() {
   const clienteContainerRef = useRef<HTMLDivElement>(null);
 
   // Modal rápido: crear cliente sin salir de la venta.
+  const emptyClienteForm = {
+    tipo_cliente: "empresa" as "empresa" | "persona",
+    empresa: "",
+    nombre_contacto: "",
+    ruc: "",
+    documento: "",
+    telefono: "",
+    telefono_secundario: "",
+    email: "",
+    email_secundario: "",
+    direccion: "",
+    ciudad: "",
+    pais: "PARAGUAY",
+    condicion_pago: "CONTADO" as "CONTADO" | "CREDITO",
+    moneda_preferida: "GS" as "GS" | "USD",
+    estado: "activo" as "activo" | "inactivo",
+    usa_nota_remision: false,
+  };
   const [clienteModalOpen, setClienteModalOpen] = useState(false);
-  const [clienteModalNombre, setClienteModalNombre] = useState("");
-  const [clienteModalRuc, setClienteModalRuc] = useState("");
-  const [clienteModalTelefono, setClienteModalTelefono] = useState("");
+  const [clienteForm, setClienteForm] = useState(emptyClienteForm);
   const [clienteModalSaving, setClienteModalSaving] = useState(false);
   const [clienteModalError, setClienteModalError] = useState<string | null>(null);
 
+  function updateClienteForm<K extends keyof typeof emptyClienteForm>(field: K, value: typeof emptyClienteForm[K]) {
+    setClienteForm((prev) => ({ ...prev, [field]: value }));
+  }
+
   async function crearClienteRapido() {
-    const nombre = clienteModalNombre.trim();
-    if (!nombre) {
-      setClienteModalError("Ingresá un nombre.");
+    const f = clienteForm;
+    const nombreContacto = f.nombre_contacto.trim();
+    const empresaNombre = f.empresa.trim();
+    if (f.tipo_cliente === "empresa" && !empresaNombre) {
+      setClienteModalError("La razón social es obligatoria para empresas.");
+      return;
+    }
+    if (!nombreContacto) {
+      setClienteModalError("El nombre de contacto es obligatorio.");
       return;
     }
     setClienteModalSaving(true);
@@ -166,10 +192,22 @@ export default function NuevaVentaPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          nombre_contacto: nombre,
-          empresa: nombre,
-          ruc: clienteModalRuc.trim() || null,
-          telefono: clienteModalTelefono.trim() || null,
+          tipo_cliente: f.tipo_cliente,
+          empresa: f.tipo_cliente === "empresa" ? empresaNombre.toUpperCase() : null,
+          nombre_contacto: nombreContacto.toUpperCase(),
+          ruc: f.ruc.trim() || null,
+          documento: f.documento.trim() || null,
+          telefono: f.telefono.trim() || null,
+          telefono_secundario: f.telefono_secundario.trim() || null,
+          email: f.email.trim().toLowerCase() || null,
+          email_secundario: f.email_secundario.trim().toLowerCase() || null,
+          direccion: f.direccion.trim() || null,
+          ciudad: f.ciudad.trim().toUpperCase() || null,
+          pais: f.pais.trim().toUpperCase() || null,
+          condicion_pago: f.condicion_pago,
+          moneda_preferida: f.moneda_preferida,
+          estado: f.estado,
+          usa_nota_remision: f.usa_nota_remision,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -186,7 +224,7 @@ export default function NuevaVentaPage() {
       const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
       const lite: ClienteLite = {
         id: nuevoId,
-        label: s(nuevo.empresa) || s(nuevo.nombre_contacto) || nombre,
+        label: s(nuevo.empresa) || s(nuevo.nombre_contacto) || nombreContacto,
         ruc: s(nuevo.ruc) || null,
         usa_nota_remision: nuevo.usa_nota_remision === true,
       };
@@ -194,10 +232,9 @@ export default function NuevaVentaPage() {
       setClienteId(lite.id);
       setClienteQuery("");
       setClienteOpen(false);
+      setGeneraNotaRemision(lite.usa_nota_remision);
       setClienteModalOpen(false);
-      setClienteModalNombre("");
-      setClienteModalRuc("");
-      setClienteModalTelefono("");
+      setClienteForm(emptyClienteForm);
     } catch (e) {
       setClienteModalError(e instanceof Error ? e.message : "Error de red.");
     } finally {
@@ -1243,59 +1280,243 @@ export default function NuevaVentaPage() {
 
       {clienteModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 px-4 py-8 backdrop-blur-sm"
           onClick={() => !clienteModalSaving && setClienteModalOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200"
+            className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-semibold text-slate-900">Nuevo cliente</h3>
-            <p className="mt-1 text-sm text-slate-500">Se crea y queda seleccionado en esta venta.</p>
-            <div className="mt-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <label className="text-xs font-medium text-slate-600">Nombre / Razón social *</label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={clienteModalNombre}
-                  onChange={(e) => setClienteModalNombre(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && clienteModalNombre.trim()) { e.preventDefault(); void crearClienteRapido(); } }}
-                  placeholder="Ej: JUAN PÉREZ o EMPRESA S.A."
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                  disabled={clienteModalSaving}
-                />
+                <h3 className="text-lg font-semibold text-slate-900">Nuevo cliente</h3>
+                <p className="mt-0.5 text-xs text-slate-500">Se crea y queda seleccionado en esta venta.</p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setClienteModalOpen(false)}
+                disabled={clienteModalSaving}
+                aria-label="Cerrar"
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {/* Tipo de cliente */}
+              <div>
+                <label className="text-xs font-medium text-slate-600">Tipo de cliente</label>
+                <div className="mt-1 inline-flex rounded-lg border border-slate-200 p-0.5">
+                  {(["empresa", "persona"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => updateClienteForm("tipo_cliente", t)}
+                      disabled={clienteModalSaving}
+                      className={`rounded-md px-3 py-1 text-xs font-medium transition ${clienteForm.tipo_cliente === t ? "bg-sky-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      {t === "empresa" ? "Empresa" : "Persona"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Identificación */}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {clienteForm.tipo_cliente === "empresa" && (
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-slate-600">Razón social *</label>
+                    <input
+                      type="text" autoFocus
+                      value={clienteForm.empresa}
+                      onChange={(e) => updateClienteForm("empresa", e.target.value)}
+                      placeholder="Ej: DISTRIBUIDORA S.A."
+                      className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                      disabled={clienteModalSaving}
+                    />
+                  </div>
+                )}
                 <div>
-                  <label className="text-xs font-medium text-slate-600">RUC / CI (opcional)</label>
+                  <label className="text-xs font-medium text-slate-600">Nombre de contacto *</label>
                   <input
-                    type="text"
-                    value={clienteModalRuc}
-                    onChange={(e) => setClienteModalRuc(e.target.value)}
-                    placeholder="Ej: 800xxxx-x"
+                    type="text" autoFocus={clienteForm.tipo_cliente === "persona"}
+                    value={clienteForm.nombre_contacto}
+                    onChange={(e) => updateClienteForm("nombre_contacto", e.target.value)}
+                    placeholder="Ej: JUAN PÉREZ"
                     className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                     disabled={clienteModalSaving}
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-600">Teléfono (opcional)</label>
+                  <label className="text-xs font-medium text-slate-600">RUC</label>
                   <input
                     type="text"
-                    value={clienteModalTelefono}
-                    onChange={(e) => setClienteModalTelefono(e.target.value)}
+                    value={clienteForm.ruc}
+                    onChange={(e) => updateClienteForm("ruc", e.target.value)}
+                    placeholder="Ej: 800XXXX-X"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Documento (CI)</label>
+                  <input
+                    type="text"
+                    value={clienteForm.documento}
+                    onChange={(e) => updateClienteForm("documento", e.target.value)}
+                    placeholder="Ej: 3.456.789"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
+              </div>
+
+              {/* Contacto */}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Teléfono</label>
+                  <input
+                    type="text"
+                    value={clienteForm.telefono}
+                    onChange={(e) => updateClienteForm("telefono", e.target.value)}
                     placeholder="Ej: 0981 000000"
                     className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                     disabled={clienteModalSaving}
                   />
                 </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Teléfono secundario</label>
+                  <input
+                    type="text"
+                    value={clienteForm.telefono_secundario}
+                    onChange={(e) => updateClienteForm("telefono_secundario", e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Email</label>
+                  <input
+                    type="email"
+                    value={clienteForm.email}
+                    onChange={(e) => updateClienteForm("email", e.target.value)}
+                    placeholder="cliente@dominio.com"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Email secundario</label>
+                  <input
+                    type="email"
+                    value={clienteForm.email_secundario}
+                    onChange={(e) => updateClienteForm("email_secundario", e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
               </div>
+
+              {/* Dirección */}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-6">
+                <div className="md:col-span-3">
+                  <label className="text-xs font-medium text-slate-600">Dirección</label>
+                  <input
+                    type="text"
+                    value={clienteForm.direccion}
+                    onChange={(e) => updateClienteForm("direccion", e.target.value)}
+                    placeholder="Calle, número, barrio"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs font-medium text-slate-600">Ciudad</label>
+                  <input
+                    type="text"
+                    value={clienteForm.ciudad}
+                    onChange={(e) => updateClienteForm("ciudad", e.target.value)}
+                    placeholder="Ej: ASUNCIÓN"
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">País</label>
+                  <input
+                    type="text"
+                    value={clienteForm.pais}
+                    onChange={(e) => updateClienteForm("pais", e.target.value)}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  />
+                </div>
+              </div>
+
+              {/* Comercial */}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Condición de pago</label>
+                  <select
+                    value={clienteForm.condicion_pago}
+                    onChange={(e) => updateClienteForm("condicion_pago", e.target.value as "CONTADO" | "CREDITO")}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  >
+                    <option value="CONTADO">Contado</option>
+                    <option value="CREDITO">Crédito</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Moneda</label>
+                  <select
+                    value={clienteForm.moneda_preferida}
+                    onChange={(e) => updateClienteForm("moneda_preferida", e.target.value as "GS" | "USD")}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  >
+                    <option value="GS">Guaraníes</option>
+                    <option value="USD">Dólares</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600">Estado</label>
+                  <select
+                    value={clienteForm.estado}
+                    onChange={(e) => updateClienteForm("estado", e.target.value as "activo" | "inactivo")}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    disabled={clienteModalSaving}
+                  >
+                    <option value="activo">Activo</option>
+                    <option value="inactivo">Inactivo</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={clienteForm.usa_nota_remision}
+                      onChange={(e) => updateClienteForm("usa_nota_remision", e.target.checked)}
+                      disabled={clienteModalSaving}
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    Usa nota de remisión
+                  </label>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400">
+                Los datos avanzados (SIFEN, obligaciones tributarias, suscripciones, prospectos) se editan después desde el detalle del cliente.
+              </p>
+
               {clienteModalError && (
                 <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                   {clienteModalError}
                 </div>
               )}
             </div>
+
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 type="button"
