@@ -82,12 +82,13 @@ const DEFAULT_VISIBLE_COLUMN_KEYS: ClienteColumnKey[] = [
   "empresa_nombre",
   "contacto",
   "telefono",
-  "plan_activo",
   "origen",
-  "tipo_servicio",
   "estado",
   "desde",
 ];
+
+/** Columnas ocultas para AB Huevos (no aplican a este cliente). */
+const HIDDEN_COLUMN_KEYS: Set<ClienteColumnKey> = new Set(["plan_activo", "tipo_servicio"]);
 
 function normalizeVisibleColumnKeys(raw: unknown, columns: ClienteColumnDef[]): ClienteColumnKey[] {
   const validKeys = new Set(columns.map((c) => c.key));
@@ -337,7 +338,10 @@ export default function ClientesPage() {
     for (const t of filasTipoCatalogo) m[t.slug] = t.nombre;
     return m;
   }, [filasTipoCatalogo]);
-  const clienteColumns = useMemo(() => buildClienteColumns(mapNombreTipo), [mapNombreTipo]);
+  const clienteColumns = useMemo(
+    () => buildClienteColumns(mapNombreTipo).filter((col) => !HIDDEN_COLUMN_KEYS.has(col.key)),
+    [mapNombreTipo]
+  );
   const visibleColumnSet = useMemo(() => new Set(visibleColumnKeys), [visibleColumnKeys]);
   const visibleColumns = useMemo(
     () => clienteColumns.filter((col) => visibleColumnSet.has(col.key)),
