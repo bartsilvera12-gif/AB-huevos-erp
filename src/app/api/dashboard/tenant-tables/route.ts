@@ -67,7 +67,7 @@ async function fallbackComprasPg(
     const t = quoteSchemaTable(schema, "compras");
     if (range) {
       const { rows } = await pool.query(
-        `SELECT * FROM ${t} WHERE empresa_id = $1::uuid AND fecha >= $2::date AND fecha <= $3::date`,
+        `SELECT * FROM ${t} WHERE empresa_id = $1::uuid AND fecha >= $2::date AND fecha < ($3::date + INTERVAL '1 day')`,
         [empresaId, range.desde, range.hasta]
       );
       return rows;
@@ -98,7 +98,7 @@ async function fallbackVentasPg(
     const t = quoteSchemaTable(schema, "ventas");
     if (range) {
       const { rows } = await pool.query(
-        `SELECT * FROM ${t} WHERE empresa_id = $1::uuid AND fecha >= $2::date AND fecha <= $3::date`,
+        `SELECT * FROM ${t} WHERE empresa_id = $1::uuid AND fecha >= $2::date AND fecha < ($3::date + INTERVAL '1 day')`,
         [empresaId, range.desde, range.hasta]
       );
       return rows;
@@ -214,30 +214,43 @@ export async function GET(request: NextRequest) {
     const dataSchema = await fetchDataSchemaForEmpresaId(empresaId);
     const usarPg = isLikelyUnexposedTenantChatSchema(dataSchema);
 
+    /**
+     * `hasta` en YYYY-MM-DD se interpreta como medianoche UTC al comparar con
+     * `timestamptz`, lo que excluye toda la tarde/noche local del día "hasta"
+     * (bug: en Paraguay las ventas de después de las 21:00 UTC del día anterior
+     * no aparecían). Se corrige usando el día siguiente con `<` inclusivo.
+     */
+    function ymdMasUno(ymd: string): string {
+      const [y, m, d] = ymd.split("-").map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      dt.setUTCDate(dt.getUTCDate() + 1);
+      return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+    }
+
     /** Helper: arma una query con o sin filtro de fecha según `range`. */
     const buildFacturasQ = () => {
       const base = supabase.from("facturas").select("*").eq("empresa_id", empresaId);
-      return range ? base.gte("fecha", range.desde).lte("fecha", range.hasta) : base;
+      return range ? base.gte("fecha", range.desde).lt("fecha", ymdMasUno(range.hasta)) : base;
     };
     const buildPagosQ = () => {
       const base = supabase.from("pagos").select("id, factura_id, monto, fecha_pago").eq("empresa_id", empresaId);
-      return range ? base.gte("fecha_pago", range.desde).lte("fecha_pago", range.hasta) : base;
+      return range ? base.gte("fecha_pago", range.desde).lt("fecha_pago", ymdMasUno(range.hasta)) : base;
     };
     const buildTipificacionesQ = () => {
       const base = supabase.from("tipificaciones").select("*").eq("empresa_id", empresaId);
-      return range ? base.gte("fecha", range.desde).lte("fecha", range.hasta) : base;
+      return range ? base.gte("fecha", range.desde).lt("fecha", ymdMasUno(range.hasta)) : base;
     };
     const buildVentasQ = () => {
       const base = supabase.from("ventas").select("*").eq("empresa_id", empresaId);
-      return range ? base.gte("fecha", range.desde).lte("fecha", range.hasta) : base;
+      return range ? base.gte("fecha", range.desde).lt("fecha", ymdMasUno(range.hasta)) : base;
     };
     const buildComprasQ = () => {
       const base = supabase.from("compras").select("*").eq("empresa_id", empresaId);
-      return range ? base.gte("fecha", range.desde).lte("fecha", range.hasta) : base;
+      return range ? base.gte("fecha", range.desde).lt("fecha", ymdMasUno(range.hasta)) : base;
     };
     const buildGastosQ = () => {
       const base = supabase.from("gastos").select("id, monto, fecha").eq("empresa_id", empresaId);
-      return range ? base.gte("fecha", range.desde).lte("fecha", range.hasta) : base;
+      return range ? base.gte("fecha", range.desde).lt("fecha", ymdMasUno(range.hasta)) : base;
     };
 
     /**
