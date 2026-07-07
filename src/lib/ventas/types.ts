@@ -49,6 +49,9 @@ export interface Venta {
 
   fecha: string;             // ISO string, generado automáticamente
 
+  /** UUID del cliente asociado (nullable si venta sin cliente). */
+  cliente_id?: string | null;
+
   /** Anulación (soft): la venta se contabiliza pero no cuenta en KPIs de venta neta. */
   anulada?: boolean;
   anulada_at?: string | null;
