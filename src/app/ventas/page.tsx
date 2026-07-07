@@ -30,6 +30,19 @@ function formatFecha(iso: string) {
   }
 }
 
+/** ¿La fecha ISO cae en el día de hoy (zona local del navegador)? */
+function esFechaHoy(iso: string): boolean {
+  try {
+    const d = new Date(iso);
+    const hoy = new Date();
+    return d.getFullYear() === hoy.getFullYear() &&
+           d.getMonth() === hoy.getMonth() &&
+           d.getDate() === hoy.getDate();
+  } catch {
+    return false;
+  }
+}
+
 // ── Constantes de estilo ───────────────────────────────────────────────────────
 
 const inputFilterClass =
@@ -438,6 +451,15 @@ export default function VentasPage() {
                             >
                               Nota de remisión
                             </a>
+                          )}
+                          {!v.anulada && esFechaHoy(v.fecha) && (
+                            <Link
+                              href={`/ventas/${v.id}/editar`}
+                              className="inline-flex items-center justify-center rounded-md border border-amber-200 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:border-amber-300 hover:bg-amber-50 transition-colors"
+                              title="Editar venta (solo mismo día)"
+                            >
+                              Editar
+                            </Link>
                           )}
                           {!v.anulada && (
                             <button
