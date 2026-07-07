@@ -80,7 +80,8 @@ interface MetricasHoy {
 }
 
 function calcularMetricas(ventas: Venta[]): MetricasHoy {
-  const deHoy            = ventas.filter((v) => esDeHoy(v.fecha));
+  // Solo ventas del día actual y NO anuladas — las anuladas no cuentan en KPIs.
+  const deHoy            = ventas.filter((v) => esDeHoy(v.fecha) && !v.anulada);
   const facturacion      = deHoy.reduce((s, v) => s + v.total, 0);
   const cantidadVentas   = deHoy.length;
   const ticketPromedio   = cantidadVentas > 0 ? facturacion / cantidadVentas : 0;

@@ -1748,19 +1748,20 @@ const DashVentas = memo(function DashVentas({
 }) {
   const { desde, hasta } = useMemo(() => getRango(periodo), [periodo]);
 
+  // KPIs comerciales — se excluyen ventas anuladas de todos los agregados de venta.
   const ventasFilt = useMemo(() =>
-    ventas.filter(v => enRango(v.fecha, desde, hasta)),
+    ventas.filter(v => !v.anulada && enRango(v.fecha, desde, hasta)),
     [ventas, desde, hasta]
   );
 
   const ventasHoy = useMemo(() => {
     const { desde: d, hasta: h } = getRango("hoy");
-    return ventas.filter(v => enRango(v.fecha, d, h));
+    return ventas.filter(v => !v.anulada && enRango(v.fecha, d, h));
   }, [ventas]);
 
   const ventasMes = useMemo(() => {
     const { desde: d, hasta: h } = getRango("mes");
-    return ventas.filter(v => enRango(v.fecha, d, h));
+    return ventas.filter(v => !v.anulada && enRango(v.fecha, d, h));
   }, [ventas]);
 
   const totalHoy   = ventasHoy.reduce((s, v) => s + v.total, 0);

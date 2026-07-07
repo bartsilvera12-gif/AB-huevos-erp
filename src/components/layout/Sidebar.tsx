@@ -599,8 +599,11 @@ export default function Sidebar() {
     const idForSlug = (slug: string) => modulos.find((m) => m.slug === slug)?.id ?? slug;
     const access = (slug: string) =>
       canAccessSidebarSlug(slug, slugs, esSuperAdmin, inactiveSlugsSet, { strict: strictAllowlist });
+    // Configuración se oculta del sidebar (accesible por URL directa /configuracion).
+    const hiddenSlugs = new Set(["configuracion"]);
     return MENU_STRUCTURE.filter(
       (item) =>
+        !hiddenSlugs.has(item.slug) &&
         !favoritos.includes(idForSlug(item.slug)) &&
         access(item.slug) &&
         menuItemMatchesQuery(item, menuSearchQuery)

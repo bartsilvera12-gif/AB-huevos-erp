@@ -87,6 +87,8 @@ export interface VentaRaw {
   moneda: string;
   tipo_cambio?: number;
   fecha: string;
+  /** true si la venta fue anulada: se excluye de KPIs comerciales. */
+  anulada?: boolean;
 }
 
 export interface CompraRaw {
@@ -467,6 +469,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         moneda: (r.moneda as string) ?? "GS",
         tipo_cambio: Number(r.tipo_cambio) ?? 1,
         fecha: toCalendarDateStr(r.fecha as string) || toIsoTimestampStr(r.fecha as string),
+        anulada: (r as { anulada?: boolean }).anulada === true,
       };
     });
 
