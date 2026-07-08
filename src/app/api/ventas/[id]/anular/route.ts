@@ -126,6 +126,18 @@ export async function POST(
       .eq("id", id);
     if (updV.error) throw new Error(updV.error.message);
 
+    // Anular cuentas por cobrar asociadas (si era venta a crédito).
+    // Saldo → 0, estado → 'anulado' — así no aparecen en Pendiente por Cobrar / Vencido.
+    const updCxc = await sb
+      .from("cuentas_por_cobrar")
+      .update({ estado: "anulado", saldo: 0 })
+      .eq("empresa_id", empresaId)
+      .eq("venta_id", id);
+    if (updCxc.error) {
+      // No fatal: la venta ya está anulada, avisamos por log pero devolvemos success.
+      console.warn("[/api/ventas/[id]/anular] no se pudo anular CxC:", updCxc.error.message);
+    }
+
     return NextResponse.json(successResponse({ id, anulada: true }));
   } catch (err) {
     console.error("[/api/ventas/[id]/anular]", err instanceof Error ? err.message : err);

@@ -61,9 +61,21 @@ export async function getEstadoCuenta(
   const tGastos = quoteSchemaTable(schema, "gastos");
   const p = pool();
 
+  // ¿La columna `anulada` existe en ventas? Se agrega defensivamente para
+  // no romper en schemas legacy que aún no la tienen.
+  const anulCol = await p.query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema=$1 AND table_name='ventas' AND column_name='anulada'
+     ) AS exists`,
+    [schema],
+  );
+  const hasAnul = anulCol.rows[0]?.exists === true;
+  const filtroNoAnul = hasAnul ? " AND COALESCE(anulada, false) = false" : "";
+
   const ventasQ = p.query<{ total: number }>(
     `SELECT COALESCE(SUM(total),0)::float8 AS total FROM ${tVentas}
-      WHERE empresa_id=$1::uuid AND fecha>=$2::timestamptz AND fecha<=$3::timestamptz`,
+      WHERE empresa_id=$1::uuid AND fecha>=$2::timestamptz AND fecha<=$3::timestamptz${filtroNoAnul}`,
     [empresaId, b.start, b.end]
   );
   const comprasQ = p.query<{ total: number }>(
@@ -78,7 +90,7 @@ export async function getEstadoCuenta(
   );
   const porCobrarQ = p.query<{ total: number }>(
     `SELECT COALESCE(SUM(total),0)::float8 AS total FROM ${tVentas}
-      WHERE empresa_id=$1::uuid AND tipo_venta='CREDITO' AND fecha>=$2::timestamptz AND fecha<=$3::timestamptz`,
+      WHERE empresa_id=$1::uuid AND tipo_venta='CREDITO' AND fecha>=$2::timestamptz AND fecha<=$3::timestamptz${filtroNoAnul}`,
     [empresaId, b.start, b.end]
   );
   const porPagarQ = p.query<{ total: number }>(
@@ -92,7 +104,7 @@ export async function getEstadoCuenta(
         SELECT fecha, 'Venta'::text AS tipo, numero_control AS referencia,
                'Venta a cliente'::text AS descripcion, total::float8 AS entrada, 0::float8 AS salida
           FROM ${tVentas}
-         WHERE empresa_id=$1::uuid AND fecha>=$2::timestamptz AND fecha<=$3::timestamptz
+         WHERE empresa_id=$1::uuid AND fecha>=$2::timestamptz AND fecha<=$3::timestamptz${filtroNoAnul}
         UNION ALL
         SELECT MIN(fecha) AS fecha, 'Compra'::text, numero_control,
                MIN(proveedor_nombre), 0::float8, SUM(total)::float8
@@ -416,6 +428,16 @@ export async function getReporteConciliacion(
   const p = pool();
   const args = [empresaId, b.start, b.end];
 
+  // ¿existe columna anulada en ventas? — filtro defensivo.
+  const anulColQ = await p.query<{ exists: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM information_schema.columns
+      WHERE table_schema=$1 AND table_name='ventas' AND column_name='anulada') AS exists`,
+    [schema],
+  );
+  const filtroNoAnul = anulColQ.rows[0]?.exists === true
+    ? " AND COALESCE(v.anulada, false) = false"
+    : "";
+
   // Conciliación = SOLO movimientos bancarios (no efectivo): no hay nada que conciliar
   // en efectivo. Incluye el cobro de ventas contado (ventas_pagos_detalle) y los cobros
   // de cuentas por cobrar (cobros_clientes). El efectivo se excluye en todos lados.
@@ -432,7 +454,7 @@ export async function getReporteConciliacion(
         LEFT JOIN ${tCli} c ON c.id=v.cliente_id AND c.empresa_id=v.empresa_id
         LEFT JOIN ${tEnt} eb ON eb.id=d.entidad_bancaria_id AND eb.empresa_id=d.empresa_id
        WHERE d.empresa_id=$1::uuid AND v.fecha>=$2::timestamptz AND v.fecha<=$3::timestamptz
-         AND d.metodo_pago IS NOT NULL AND d.metodo_pago <> 'efectivo'
+         AND d.metodo_pago IS NOT NULL AND d.metodo_pago <> 'efectivo'${filtroNoAnul}
       UNION ALL
       SELECT cc.id::text AS id, 'cobro'::text AS tipo, cc.fecha_pago AS fecha,
              COALESCE(vc.numero_control, cta.numero_venta) AS numero, c.nombre AS cliente, cc.metodo_pago AS metodo,
