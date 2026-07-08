@@ -11,7 +11,7 @@ import {
   type UsuarioFormValues,
 } from "@/components/usuarios/UsuarioForm";
 
-type ModuloRow = { id: string; nombre: string; slug: string; descripcion: string | null };
+type ModuloRow = { id: string; nombre: string; slug: string; descripcion: string | null; activo_empresa?: boolean };
 
 export default function NuevoUsuarioPage() {
   const router = useRouter();
@@ -35,8 +35,10 @@ export default function NuevoUsuarioPage() {
         if (r.ok && j?.success !== false) {
           const lista = (j?.data?.modulos ?? []) as ModuloRow[];
           setModulosDisponibles(lista);
-          // Por defecto se marcan todos, así el UX es "editable-desde-todo"
-          setModulosElegidos(new Set(lista.map((m) => m.id)));
+          // Por defecto se marcan los activos para la empresa (evita habilitar por accidente
+          // módulos que la empresa todavía no compró/configuró).
+          const preSel = lista.filter((m) => m.activo_empresa !== false).map((m) => m.id);
+          setModulosElegidos(new Set(preSel));
         }
       } catch { /* opcional */ }
       finally { if (!cancelado) setCargandoModulos(false); }
@@ -218,8 +220,15 @@ export default function NuevoUsuarioPage() {
                       onChange={() => toggleModulo(m.id)}
                       className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
                     />
-                    <div className="min-w-0">
-                      <div className="font-medium text-slate-800">{m.nombre}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium text-slate-800">{m.nombre}</span>
+                        {m.activo_empresa === false && (
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
+                            Inactivo en la empresa
+                          </span>
+                        )}
+                      </div>
                       {m.descripcion && (
                         <div className="text-[11px] text-slate-500 line-clamp-2">{m.descripcion}</div>
                       )}

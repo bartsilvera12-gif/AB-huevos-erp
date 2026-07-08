@@ -186,14 +186,11 @@ export async function POST(req: Request) {
 
       let moduloIdsElegidos: string[] = [];
       if (moduloIdsBody !== null) {
-        // Validar que los IDs pasados sean módulos activos de la empresa.
-        const { data: emActivos } = await supabase
-          .from("empresa_modulos")
-          .select("modulo_id")
-          .eq("empresa_id", empresaId)
-          .eq("activo", true);
-        const activosSet = new Set((emActivos ?? []).map((r) => r.modulo_id as string));
-        moduloIdsElegidos = moduloIdsBody.filter((id) => activosSet.has(id));
+        // Validar que los IDs existan en el catálogo (no filtrar por empresa_modulos:
+        // el admin puede querer granular acceso incluso a módulos no seedeados aún).
+        const { data: catalogo } = await supabase.from("modulos").select("id");
+        const catSet = new Set((catalogo ?? []).map((r) => r.id as string));
+        moduloIdsElegidos = moduloIdsBody.filter((id) => catSet.has(id));
       } else {
         const { data: emActivos } = await supabase
           .from("empresa_modulos")

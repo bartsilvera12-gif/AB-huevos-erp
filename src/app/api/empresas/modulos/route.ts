@@ -5,8 +5,9 @@ import { API_ERRORS } from "@/lib/api/errors";
 
 /**
  * GET /api/empresas/modulos
- * Devuelve los módulos activos para la empresa del usuario autenticado,
- * pensado para pintar la lista de checkboxes al crear/editar un usuario.
+ * Devuelve TODO el catálogo de módulos disponibles en el schema del tenant,
+ * marcando cuáles están activos en `empresa_modulos` para la empresa actual.
+ * Pensado para pintar la lista de checkboxes al crear/editar un usuario.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -14,27 +15,36 @@ export async function GET(request: NextRequest) {
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const { supabase, auth } = ctx;
 
+    // 1) Catálogo completo
+    const catQ = await supabase
+      .from("modulos")
+      .select("id, nombre, slug, descripcion")
+      .order("nombre");
+    if (catQ.error) return NextResponse.json(errorResponse(catQ.error.message), { status: 400 });
+
+    // 2) Activos en empresa_modulos → sirve para marcar en UI
     const emQ = await supabase
       .from("empresa_modulos")
-      .select("modulo_id, activo, modulos!inner(id, nombre, slug, descripcion)")
-      .eq("empresa_id", auth.empresa_id)
-      .eq("activo", true);
-    if (emQ.error) return NextResponse.json(errorResponse(emQ.error.message), { status: 400 });
+      .select("modulo_id, activo")
+      .eq("empresa_id", auth.empresa_id);
+    const activos = new Set(
+      (emQ.data ?? [])
+        .filter((r) => (r as { activo?: boolean }).activo === true)
+        .map((r) => (r as { modulo_id: string }).modulo_id)
+    );
 
-    type Row = {
-      modulo_id: string;
-      modulos: { id: string; nombre: string; slug: string; descripcion?: string | null } | Array<{ id: string; nombre: string; slug: string; descripcion?: string | null }>;
-    };
-    const modulos = (emQ.data ?? []).map((r) => {
-      const rr = r as Row;
-      const m = Array.isArray(rr.modulos) ? rr.modulos[0] : rr.modulos;
-      return {
-        id: m?.id ?? rr.modulo_id,
-        nombre: m?.nombre ?? "",
-        slug: m?.slug ?? "",
-        descripcion: m?.descripcion ?? null,
-      };
-    }).filter((m) => m.slug).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    const modulos = (catQ.data ?? [])
+      .map((r) => {
+        const m = r as { id: string; nombre: string; slug: string; descripcion: string | null };
+        return {
+          id: m.id,
+          nombre: m.nombre ?? "",
+          slug: m.slug ?? "",
+          descripcion: m.descripcion ?? null,
+          activo_empresa: activos.has(m.id),
+        };
+      })
+      .filter((m) => m.slug);
 
     return NextResponse.json(successResponse({ modulos }));
   } catch (err) {
