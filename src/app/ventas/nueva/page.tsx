@@ -262,7 +262,7 @@ export default function NuevaVentaPage() {
   const [lineaProdId, setLineaProdId] = useState("");
   const [lineaCant,   setLineaCant]   = useState("");
   const [lineaPrecio, setLineaPrecio] = useState("");
-  const [lineaIva,    setLineaIva]    = useState<TipoIvaVenta>("10%");
+  const [lineaIva,    setLineaIva]    = useState<TipoIvaVenta>("5%");
   const [lineaTipoPrecio, setLineaTipoPrecio] = useState<TipoPrecioVenta>("minorista");
 
   // ── Combobox de producto ───────────────────────────────────────────────────
@@ -383,7 +383,7 @@ export default function NuevaVentaPage() {
           .map((it) => {
             const cantidad = Number(it.cantidad) || 0;
             const precio = Number(it.precio_venta) || 0;
-            const iva: TipoIvaVenta = "10%";
+            const iva: TipoIvaVenta = "5%";
             // IVA incluido: total de línea = precio × cantidad; IVA desglosado desde adentro.
             const totalLinea = cantidad * precio;
             const montoIva = calcIva(iva, totalLinea);
@@ -550,7 +550,7 @@ export default function NuevaVentaPage() {
     setLineaTipoPrecio("minorista");
     setLineaPrecio(String(precioPorTipo(p, "minorista")));
     setLineaCant("1");
-    setLineaIva("10%");
+    setLineaIva("5%");
     setComboQuery(`${p.nombre} — ${p.sku}`);
     setComboOpen(false);
     setComboHighlight(-1);
@@ -645,7 +645,7 @@ export default function NuevaVentaPage() {
     setLineaProdId("");
     setLineaCant("");
     setLineaPrecio("");
-    setLineaIva("10%");
+    setLineaIva("5%");
     setLineaTipoPrecio("minorista");
     setComboQuery("");
     setComboOpen(false);

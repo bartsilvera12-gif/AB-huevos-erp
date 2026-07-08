@@ -496,6 +496,7 @@ export default function InventarioPage() {
                 <th className="py-3 pr-4 text-center font-medium hidden lg:table-cell">Stock Mín.</th>
                 <th className="py-3 pr-4 font-medium hidden lg:table-cell">Ubicación</th>
                 <th className="py-3 pr-4 font-medium hidden lg:table-cell">Valuación</th>
+                <th className="py-3 pr-4 font-medium hidden lg:table-cell">IVA</th>
                 {tab !== "materia" && (
                   <th className="hidden py-3 pr-6 text-right font-medium lg:table-cell">
                     <span title="(precio - costo) / precio × 100">Margen s/venta</span>
@@ -563,6 +564,20 @@ export default function InventarioPage() {
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${metodoBadge[p.metodo_valuacion]}`}>
                         {p.metodo_valuacion}
                       </span>
+                    </td>
+                    <td className="py-4 pr-4 hidden lg:table-cell">
+                      {(() => {
+                        const iv = (p as { tipo_iva?: string }).tipo_iva;
+                        const label = iv === "EXENTA" ? "Exenta" : (iv ?? "—");
+                        const cls =
+                          iv === "10%" ? "bg-sky-100 text-sky-800"
+                          : iv === "5%" ? "bg-emerald-100 text-emerald-800"
+                          : iv === "EXENTA" ? "bg-slate-100 text-slate-700"
+                          : "bg-slate-50 text-slate-400";
+                        return (
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${cls}`}>{label}</span>
+                        );
+                      })()}
                     </td>
                     {tab !== "materia" && (
                       <td className={`hidden py-4 pr-6 text-right font-semibold tabular-nums lg:table-cell ${margenColor(margen)}`}>
