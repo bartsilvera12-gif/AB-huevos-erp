@@ -45,6 +45,7 @@ export default function NuevoProductoPage() {
     stock_minimo: "",
     unidad_medida: "",
     metodo_valuacion: "CPP" as MetodoValuacion,
+    tipo_iva: "5%" as "EXENTA" | "5%" | "10%",
   });
   const [submitting, setSubmitting] = useState(false);
   const [generandoCodigo, setGenerandoCodigo] = useState(false);
@@ -406,6 +407,7 @@ export default function NuevoProductoPage() {
           stock_minimo: parseInt(form.stock_minimo) || 0,
           unidad_medida: form.unidad_medida.trim().toUpperCase(),
           metodo_valuacion: form.metodo_valuacion,
+          tipo_iva: form.tipo_iva,
           codigo_barras: codigo,
           codigo_barras_interno: interno,
           categoria_principal_id: categoriaId,
@@ -694,6 +696,29 @@ export default function NuevoProductoPage() {
                   <option key={u} value={u}>{u}</option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>IVA aplicable</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["EXENTA", "5%", "10%"] as const).map((iv) => (
+                  <button
+                    key={iv}
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, tipo_iva: iv }))}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                      form.tipo_iva === iv
+                        ? "bg-[#4FAEB2] text-white shadow-sm"
+                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {iv === "EXENTA" ? "Exenta" : iv}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Se aplica automáticamente en cada venta. No se puede modificar por venta.
+              </p>
             </div>
           </div>
 

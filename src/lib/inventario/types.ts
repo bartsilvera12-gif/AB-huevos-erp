@@ -18,6 +18,8 @@ export interface Producto {
   stock_minimo: number;
   unidad_medida: string;
   metodo_valuacion: MetodoValuacion;
+  /** IVA por defecto del producto — se aplica en cada venta sin poder cambiarlo. */
+  tipo_iva?: "EXENTA" | "5%" | "10%";
   codigo_barras?: string | null;
   codigo_barras_interno?: boolean;
   imagen_path?: string | null;

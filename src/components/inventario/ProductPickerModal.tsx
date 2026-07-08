@@ -26,6 +26,8 @@ export interface ProductoPickerItem {
   controla_stock?: boolean;
   /** Modo de receta: 'produccion_previa' (Menú stockeado) muestra stock real. */
   modo_receta?: string;
+  /** IVA por defecto del producto (fijo — no se puede cambiar en la venta). */
+  tipo_iva?: "EXENTA" | "5%" | "10%";
 }
 
 /** Un Menú con produccion_previa maneja stock real del terminado (como reventa para mostrar). */
@@ -155,7 +157,8 @@ export default function ProductPickerModal({
     // Precio inicial: minorista (precio_venta) en la moneda de la venta.
     setTipoPrecio("minorista");
     setPrecio(precioEnMonedaStr(precioPorTipoPicker(p, "minorista")));
-    setIva(ivaDefault);
+    // IVA fijo del producto (fallback al default de la venta si el producto no lo tiene).
+    setIva(p.tipo_iva ?? ivaDefault);
     setFeedback(null);
   }
 
@@ -413,17 +416,12 @@ export default function ProductPickerModal({
 
                   <div>
                     <label className="block text-[11px] uppercase text-slate-400 mb-1">IVA</label>
-                    <div className="flex border border-slate-200 rounded-lg overflow-hidden">
-                      {(["EXENTA", "5%", "10%"] as const).map((opt) => (
-                        <button
-                          key={opt} type="button"
-                          onClick={() => setIva(opt)}
-                          className={`flex-1 py-1.5 text-xs font-medium ${iva === opt ? "bg-[#0EA5E9] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                      {iva === "EXENTA" ? "Exenta" : iva}
                     </div>
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      Definido en el producto — no se puede modificar.
+                    </p>
                   </div>
 
                   <div className="text-xs text-slate-500 space-y-0.5 pt-1">

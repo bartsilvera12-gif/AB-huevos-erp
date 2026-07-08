@@ -54,6 +54,7 @@ export default function EditarProductoPage() {
     stock_minimo: "",
     unidad_medida: "",
     metodo_valuacion: "CPP" as MetodoValuacion,
+    tipo_iva: "5%" as "EXENTA" | "5%" | "10%",
   });
   const [imagenPath, setImagenPath] = useState<string | null>(null);
   const [imagenUrl, setImagenUrl] = useState<string | null>(null);
@@ -204,6 +205,7 @@ export default function EditarProductoPage() {
         stock_minimo: String(p.stock_minimo),
         unidad_medida: p.unidad_medida,
         metodo_valuacion: p.metodo_valuacion,
+        tipo_iva: (p.tipo_iva as "EXENTA" | "5%" | "10%" | undefined) ?? "5%",
       });
       setCodigoOriginal(p.codigo_barras ?? null);
       setImagenPath(p.imagen_path ?? null);
@@ -344,6 +346,7 @@ export default function EditarProductoPage() {
         stock_minimo: parseInt(form.stock_minimo) || 0,
         unidad_medida: form.unidad_medida.trim().toUpperCase() || "UNIDAD",
         metodo_valuacion: form.metodo_valuacion,
+        tipo_iva: form.tipo_iva,
         categoria_principal_id: categoriaId,
         ubicacion_principal_id: ubicacionId,
         proveedor_principal_id: proveedorId,
@@ -606,6 +609,29 @@ export default function EditarProductoPage() {
                   ));
                 })()}
               </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>IVA aplicable</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["EXENTA", "5%", "10%"] as const).map((iv) => (
+                  <button
+                    key={iv}
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, tipo_iva: iv }))}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                      form.tipo_iva === iv
+                        ? "bg-[#4FAEB2] text-white shadow-sm"
+                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {iv === "EXENTA" ? "Exenta" : iv}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Se aplica automáticamente en cada venta.
+              </p>
             </div>
           </div>
 

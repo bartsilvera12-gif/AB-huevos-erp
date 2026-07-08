@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       .select(
         "id, nombre, sku, codigo_barras, codigo_barras_interno, " +
           "precio_venta, precio_mayorista, precio_distribuidor, costo_promedio, stock_actual, stock_minimo, " +
-          "unidad_medida, metodo_valuacion, imagen_path, imagen_url, " +
+          "unidad_medida, metodo_valuacion, tipo_iva, imagen_path, imagen_url, " +
           "categoria_principal_id, proveedor_principal_id, ubicacion_principal_id, " +
           "es_vendible, controla_stock, modo_receta, activo"
       )

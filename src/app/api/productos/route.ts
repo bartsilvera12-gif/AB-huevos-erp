@@ -15,7 +15,7 @@ const PRODUCTO_COLS =
   "codigo_barras, codigo_barras_interno, imagen_path, imagen_url, " +
   "categoria_principal_id, ubicacion_principal_id, proveedor_principal_id, " +
   "es_vendible, es_insumo, controla_stock, valorizado, unidad_compra, unidad_receta, " +
-  "factor_compra_receta, tiempo_prep_minutos, descripcion, precio_mayorista, cantidad_minima_mayorista, precio_distribuidor, modo_receta";
+  "factor_compra_receta, tiempo_prep_minutos, descripcion, precio_mayorista, cantidad_minima_mayorista, precio_distribuidor, modo_receta, tipo_iva";
 
 function toNumber(v: unknown): unknown {
   return typeof v === "string" ? Number(v) : v;
@@ -104,6 +104,8 @@ export async function POST(request: NextRequest) {
       body.metodo_valuacion === "FIFO" || body.metodo_valuacion === "LIFO"
         ? (body.metodo_valuacion as "FIFO" | "LIFO")
         : "CPP";
+    const tipoIva: "EXENTA" | "5%" | "10%" =
+      body.tipo_iva === "EXENTA" || body.tipo_iva === "10%" ? body.tipo_iva : "5%";
 
     const categoriaPrincipalId = body.categoria_principal_id ? String(body.categoria_principal_id) : null;
     const ubicacionPrincipalId = body.ubicacion_principal_id ? String(body.ubicacion_principal_id) : null;
@@ -156,6 +158,7 @@ export async function POST(request: NextRequest) {
       stock_minimo: stockMinimo,
       unidad_medida: unidadMedida,
       metodo_valuacion: metodoValuacion,
+      tipo_iva: tipoIva,
       codigo_barras: codigoBarras,
       codigo_barras_interno: codigoBarras ? codigoBarrasInterno : false,
       categoria_principal_id: categoriaPrincipalId,

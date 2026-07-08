@@ -11,7 +11,7 @@ const PRODUCTO_COLS =
   "codigo_barras, codigo_barras_interno, imagen_path, imagen_url, " +
   "categoria_principal_id, ubicacion_principal_id, proveedor_principal_id, " +
   "es_vendible, es_insumo, controla_stock, valorizado, unidad_compra, unidad_receta, " +
-  "factor_compra_receta, tiempo_prep_minutos, descripcion, precio_mayorista, cantidad_minima_mayorista, precio_distribuidor, modo_receta";
+  "factor_compra_receta, tiempo_prep_minutos, descripcion, precio_mayorista, cantidad_minima_mayorista, precio_distribuidor, modo_receta, tipo_iva";
 
 function toNumber(v: unknown): unknown {
   return typeof v === "string" ? Number(v) : v;
@@ -103,6 +103,10 @@ export async function PATCH(
     if (body.metodo_valuacion !== undefined) {
       const mv = body.metodo_valuacion;
       patch.metodo_valuacion = mv === "FIFO" || mv === "LIFO" ? mv : "CPP";
+    }
+    if (body.tipo_iva !== undefined) {
+      const iv = String(body.tipo_iva);
+      patch.tipo_iva = iv === "EXENTA" || iv === "10%" ? iv : "5%";
     }
     if (body.codigo_barras !== undefined) patch.codigo_barras = normalizeUpperCodigoBarras(body.codigo_barras);
     if (body.codigo_barras_interno !== undefined) patch.codigo_barras_interno = body.codigo_barras_interno === true;
