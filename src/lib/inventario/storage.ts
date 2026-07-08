@@ -43,6 +43,7 @@ interface ProductoRow {
   tiempo_prep_minutos?: number | null;
   descripcion?: string | null;
   modo_receta?: string | null;
+  tipo_iva?: string | null;
 }
 
 interface MovimientoRow {
@@ -96,6 +97,7 @@ function rowToProducto(row: ProductoRow): Producto {
     tiempo_prep_minutos: row.tiempo_prep_minutos != null ? Number(row.tiempo_prep_minutos) : 0,
     descripcion: row.descripcion ?? null,
     modo_receta: row.modo_receta ?? "preparado_al_vender",
+    tipo_iva: (row.tipo_iva as "EXENTA" | "5%" | "10%" | undefined) ?? undefined,
   };
 }
 
