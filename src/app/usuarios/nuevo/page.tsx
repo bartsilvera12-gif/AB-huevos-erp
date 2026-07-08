@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import {
@@ -11,6 +11,8 @@ import {
   type UsuarioFormValues,
 } from "@/components/usuarios/UsuarioForm";
 
+type ModuloRow = { id: string; nombre: string; slug: string; descripcion: string | null };
+
 export default function NuevoUsuarioPage() {
   const router = useRouter();
 
@@ -19,6 +21,40 @@ export default function NuevoUsuarioPage() {
   const [showPwd2, setShowPwd2] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [modulosDisponibles, setModulosDisponibles] = useState<ModuloRow[]>([]);
+  const [modulosElegidos, setModulosElegidos] = useState<Set<string>>(new Set());
+  const [cargandoModulos, setCargandoModulos] = useState(true);
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      try {
+        const r = await fetchWithSupabaseSession("/api/empresas/modulos", { cache: "no-store" });
+        const j = await r.json().catch(() => ({}));
+        if (cancelado) return;
+        if (r.ok && j?.success !== false) {
+          const lista = (j?.data?.modulos ?? []) as ModuloRow[];
+          setModulosDisponibles(lista);
+          // Por defecto se marcan todos, así el UX es "editable-desde-todo"
+          setModulosElegidos(new Set(lista.map((m) => m.id)));
+        }
+      } catch { /* opcional */ }
+      finally { if (!cancelado) setCargandoModulos(false); }
+    })();
+    return () => { cancelado = true; };
+  }, []);
+
+  function toggleModulo(id: string) {
+    setModulosElegidos((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function marcarTodos() { setModulosElegidos(new Set(modulosDisponibles.map((m) => m.id))); }
+  function desmarcarTodos() { setModulosElegidos(new Set()); }
+
+  const esRolAdminEmpresa = form.nivel === "administrador"; // admins ven todos, sin picker
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value, type } = e.target;
@@ -84,6 +120,7 @@ export default function NuevoUsuarioPage() {
           ips: form.ips,
           area: form.area,
           rol: rolFromNivelForm(form.nivel),
+          modulo_ids: esRolAdminEmpresa ? undefined : Array.from(modulosElegidos),
         }),
       });
       const json = await res.json();
@@ -136,6 +173,63 @@ export default function NuevoUsuarioPage() {
           showPwd2={showPwd2}
           setShowPwd2={setShowPwd2}
         />
+
+        {/* Selector de módulos permitidos */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Módulos habilitados</h3>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {esRolAdminEmpresa
+                  ? "Los administradores acceden a todos los módulos activos de la empresa."
+                  : "Elegí a qué módulos podrá acceder este usuario en el sistema."}
+              </p>
+            </div>
+            {!esRolAdminEmpresa && modulosDisponibles.length > 0 && (
+              <div className="flex gap-2 text-xs">
+                <button type="button" onClick={marcarTodos} className="rounded-md border border-sky-200 bg-white px-2.5 py-1 font-medium text-sky-700 hover:bg-sky-50">
+                  Marcar todos
+                </button>
+                <button type="button" onClick={desmarcarTodos} className="rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-50">
+                  Desmarcar todos
+                </button>
+              </div>
+            )}
+          </div>
+
+          {esRolAdminEmpresa ? (
+            <p className="text-xs text-slate-400 italic">Todos los módulos activos disponibles.</p>
+          ) : cargandoModulos ? (
+            <p className="text-xs text-slate-400 animate-pulse">Cargando módulos…</p>
+          ) : modulosDisponibles.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">No hay módulos activos configurados para esta empresa.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+              {modulosDisponibles.map((m) => {
+                const marcado = modulosElegidos.has(m.id);
+                return (
+                  <label
+                    key={m.id}
+                    className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm transition ${marcado ? "border-sky-300 bg-sky-50/60" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={marcado}
+                      onChange={() => toggleModulo(m.id)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <div className="min-w-0">
+                      <div className="font-medium text-slate-800">{m.nombre}</div>
+                      {m.descripcion && (
+                        <div className="text-[11px] text-slate-500 line-clamp-2">{m.descripcion}</div>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center gap-3">
           <button

@@ -178,15 +178,35 @@ export async function POST(req: Request) {
 
     await supabase.from("usuario_modulos").delete().eq("usuario_id", targetId);
     if (!esRolAdminEmpresa(rol)) {
-      const { data: emActivos } = await supabase
-        .from("empresa_modulos")
-        .select("modulo_id")
-        .eq("empresa_id", empresaId)
-        .eq("activo", true);
-      if (emActivos && emActivos.length > 0) {
-        const umRows = emActivos.map((r) => ({
+      // Si viene `modulo_ids` en el body, usar solo esos (permite elegir módulos por usuario).
+      // Si no viene, mantener comportamiento anterior: todos los activos de la empresa.
+      const moduloIdsBody = Array.isArray((body as Record<string, unknown>).modulo_ids)
+        ? ((body as Record<string, unknown>).modulo_ids as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)
+        : null;
+
+      let moduloIdsElegidos: string[] = [];
+      if (moduloIdsBody !== null) {
+        // Validar que los IDs pasados sean módulos activos de la empresa.
+        const { data: emActivos } = await supabase
+          .from("empresa_modulos")
+          .select("modulo_id")
+          .eq("empresa_id", empresaId)
+          .eq("activo", true);
+        const activosSet = new Set((emActivos ?? []).map((r) => r.modulo_id as string));
+        moduloIdsElegidos = moduloIdsBody.filter((id) => activosSet.has(id));
+      } else {
+        const { data: emActivos } = await supabase
+          .from("empresa_modulos")
+          .select("modulo_id")
+          .eq("empresa_id", empresaId)
+          .eq("activo", true);
+        moduloIdsElegidos = (emActivos ?? []).map((r) => r.modulo_id as string);
+      }
+
+      if (moduloIdsElegidos.length > 0) {
+        const umRows = moduloIdsElegidos.map((id) => ({
           usuario_id: targetId,
-          modulo_id: r.modulo_id as string,
+          modulo_id: id,
         }));
         const { error: errUm } = await supabase.from("usuario_modulos").insert(umRows);
         if (errUm) {
