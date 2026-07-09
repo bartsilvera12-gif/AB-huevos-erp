@@ -109,31 +109,27 @@ export async function createGasto(input: GastoInput): Promise<Gasto> {
 
 export async function updateGasto(id: string, input: Partial<GastoInput>): Promise<Gasto> {
   if (input.monto !== undefined && input.monto <= 0) throw new Error("El monto debe ser mayor a 0");
-
-  const supabase = await getBrowserSupabaseForEmpresaData();
-  const update: Record<string, unknown> = {};
-  if (input.categoria !== undefined) update.categoria = input.categoria.trim() || null;
-  if (input.descripcion !== undefined) update.descripcion = input.descripcion.trim() || null;
-  if (input.monto !== undefined) update.monto = input.monto;
-  if (input.tipo !== undefined) update.tipo = input.tipo;
-  if (input.recurrente !== undefined) update.recurrente = input.recurrente;
-  if (input.frecuencia !== undefined) update.frecuencia = input.frecuencia?.trim() || null;
-  if (input.fecha !== undefined) update.fecha = input.fecha;
-
-  const { data, error } = await supabase
-    .from("gastos")
-    .update(update)
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return mapRow(data as Record<string, unknown>);
+  const res = await fetch(`/api/gastos/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j?.success === false) {
+    throw new Error(j?.error ?? "No se pudo actualizar el gasto");
+  }
+  const row = j?.data?.gasto ?? j?.data ?? j;
+  return mapRow(row as Record<string, unknown>);
 }
 
 export async function deleteGasto(id: string): Promise<void> {
-  const supabase = await getBrowserSupabaseForEmpresaData();
-  const { error } = await supabase.from("gastos").delete().eq("id", id);
-
-  if (error) throw new Error(error.message);
+  const res = await fetch(`/api/gastos/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j?.success === false) {
+    throw new Error(j?.error ?? "No se pudo borrar el gasto");
+  }
 }
