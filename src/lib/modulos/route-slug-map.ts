@@ -94,6 +94,8 @@ export function canAccessSidebarSlug(
   opts?: { strict?: boolean }
 ): boolean {
   if (esSuperAdmin) return true;
+  // DEMO: galpones siempre visible en el sidebar (aún no está en la DB de módulos).
+  if (slug === "galpones") return true;
   if (slug === "dashboard") return grantedSlugs.has("dashboard");
   return isModuleSlugGranted(slug, grantedSlugs, inactiveSlugs, opts);
 }
@@ -140,6 +142,8 @@ export function pathRequiresModuleSlug(pathname: string): string | null {
   if (p.startsWith("/ventas")) return "ventas";
   if (p.startsWith("/inventario")) return "inventario";
   if (p.startsWith("/clientes")) return "clientes";
+  // DEMO: /galpones no exige módulo en DB — solo requiere estar autenticado.
+  if (p.startsWith("/galpones")) return null;
   if (p.startsWith("/proveedores")) return "compras";
   if (p.startsWith("/compras")) return "compras";
   if (p.startsWith("/gastos")) return "gastos";
