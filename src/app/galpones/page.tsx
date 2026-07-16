@@ -302,21 +302,45 @@ function ModalFormulario({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-slate-600">Fecha de inicio</label>
-              <input
-                type="date"
-                value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              />
+              <div className="mt-1 flex gap-1.5">
+                <input
+                  type="date"
+                  value={fechaInicio}
+                  onChange={(e) => setFechaInicio(e.target.value)}
+                  className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                />
+                {fechaInicio && (
+                  <button
+                    type="button"
+                    onClick={() => setFechaInicio("")}
+                    title="Borrar fecha"
+                    className="shrink-0 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Fecha de fin</label>
-              <input
-                type="date"
-                value={fechaFin}
-                onChange={(e) => setFechaFin(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              />
+              <div className="mt-1 flex gap-1.5">
+                <input
+                  type="date"
+                  value={fechaFin}
+                  onChange={(e) => setFechaFin(e.target.value)}
+                  className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                />
+                {fechaFin && (
+                  <button
+                    type="button"
+                    onClick={() => setFechaFin("")}
+                    title="Borrar fecha"
+                    className="shrink-0 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
               <p className="mt-1 text-[10px] text-slate-400">Vacío = lote activo</p>
             </div>
           </div>
