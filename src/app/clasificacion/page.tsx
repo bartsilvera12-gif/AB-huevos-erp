@@ -14,7 +14,15 @@ type LineaClasificacion = {
   tipo_id: string;
   cantidad: number;
   planchas: number;
+  unidades: number;
 };
+
+/** Convención: 1 plancha = 30 huevos. Unidades = sobrantes que no llenan una plancha completa. */
+const HUEVOS_POR_PLANCHA = 30;
+function calcularPlanchasUnidades(cantidad: number): { planchas: number; unidades: number } {
+  const n = Math.max(0, Math.trunc(cantidad));
+  return { planchas: Math.floor(n / HUEVOS_POR_PLANCHA), unidades: n % HUEVOS_POR_PLANCHA };
+}
 
 type Clasificacion = {
   id: string;
@@ -46,14 +54,14 @@ const CLASIFICACIONES_DEMO: Clasificacion[] = [
     cantidad_huevos: 9840, bajas: 0, responsable: "luzovelar",
     fecha_distribucion: "2025-03-21T18:19:54", resp_distribucion: "luzovelar",
     detalle: [
-      { tipo_id: "t1", cantidad: 30, planchas: 1 },
-      { tipo_id: "t2", cantidad: 2190, planchas: 73 },
-      { tipo_id: "t3", cantidad: 5040, planchas: 168 },
-      { tipo_id: "t4", cantidad: 990, planchas: 33 },
-      { tipo_id: "t5", cantidad: 30, planchas: 1 },
-      { tipo_id: "t6", cantidad: 90, planchas: 3 },
-      { tipo_id: "t7", cantidad: 630, planchas: 21 },
-      { tipo_id: "t8", cantidad: 780, planchas: 26 },
+      { tipo_id: "t1", cantidad: 30,   planchas: 1,   unidades: 0 },
+      { tipo_id: "t2", cantidad: 2190, planchas: 73,  unidades: 0 },
+      { tipo_id: "t3", cantidad: 5040, planchas: 168, unidades: 0 },
+      { tipo_id: "t4", cantidad: 990,  planchas: 33,  unidades: 0 },
+      { tipo_id: "t5", cantidad: 30,   planchas: 1,   unidades: 0 },
+      { tipo_id: "t6", cantidad: 93,   planchas: 3,   unidades: 3 },
+      { tipo_id: "t7", cantidad: 630,  planchas: 21,  unidades: 0 },
+      { tipo_id: "t8", cantidad: 780,  planchas: 26,  unidades: 0 },
     ],
   },
   {
@@ -289,24 +297,24 @@ function ModalClasificacion({
   onClose: () => void;
   onGuardar: (c: Clasificacion) => void;
 }) {
-  const [detalle, setDetalle] = useState<Record<string, { cantidad: number; planchas: number }>>(() => {
-    const base: Record<string, { cantidad: number; planchas: number }> = {};
+  const [cantidades, setCantidades] = useState<Record<string, number>>(() => {
+    const base: Record<string, number> = {};
     for (const t of tipos) {
       const existente = clasificacion.detalle.find((d) => d.tipo_id === t.id);
-      base[t.id] = { cantidad: existente?.cantidad ?? 0, planchas: existente?.planchas ?? 0 };
+      base[t.id] = existente?.cantidad ?? 0;
     }
     return base;
   });
 
-  const totalClasificado = Object.values(detalle).reduce((s, l) => s + l.cantidad, 0);
+  const totalClasificado = Object.values(cantidades).reduce((s, n) => s + (n || 0), 0);
   const porClasificar = clasificacion.cantidad_huevos - clasificacion.bajas - totalClasificado;
 
   function guardar() {
-    const detalleArr: LineaClasificacion[] = tipos.map((t) => ({
-      tipo_id: t.id,
-      cantidad: detalle[t.id]?.cantidad ?? 0,
-      planchas: detalle[t.id]?.planchas ?? 0,
-    })).filter((d) => d.cantidad > 0 || d.planchas > 0);
+    const detalleArr: LineaClasificacion[] = tipos.map((t) => {
+      const cant = cantidades[t.id] ?? 0;
+      const { planchas, unidades } = calcularPlanchasUnidades(cant);
+      return { tipo_id: t.id, cantidad: cant, planchas, unidades };
+    }).filter((d) => d.cantidad > 0);
     onGuardar({ ...clasificacion, detalle: detalleArr });
   }
 
@@ -343,40 +351,42 @@ function ModalClasificacion({
                 <th className="px-4 py-3">Tipo huevo</th>
                 <th className="px-4 py-3 text-right">Cantidad</th>
                 <th className="px-4 py-3 text-right">Planchas</th>
+                <th className="px-4 py-3 text-right">Unidades</th>
               </tr>
             </thead>
             <tbody>
-              {tipos.map((t) => (
-                <tr key={t.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-2.5 font-semibold text-slate-700">{t.nombre}</td>
-                  <td className="px-4 py-2.5">
-                    <input
-                      type="number"
-                      min={0}
-                      value={detalle[t.id]?.cantidad ?? 0}
-                      onChange={(e) => setDetalle((prev) => ({ ...prev, [t.id]: { ...prev[t.id], cantidad: Number(e.target.value) || 0 } }))}
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-right text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                    />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <input
-                      type="number"
-                      min={0}
-                      value={detalle[t.id]?.planchas ?? 0}
-                      onChange={(e) => setDetalle((prev) => ({ ...prev, [t.id]: { ...prev[t.id], planchas: Number(e.target.value) || 0 } }))}
-                      className="w-full rounded-md border border-slate-300 px-2 py-1 text-right text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                    />
-                  </td>
-                </tr>
-              ))}
+              {tipos.map((t) => {
+                const cant = cantidades[t.id] ?? 0;
+                const { planchas, unidades } = calcularPlanchasUnidades(cant);
+                return (
+                  <tr key={t.id} className="border-b border-slate-100 last:border-0">
+                    <td className="px-4 py-2.5 font-semibold text-slate-700">{t.nombre}</td>
+                    <td className="px-4 py-2.5">
+                      <input
+                        type="number"
+                        min={0}
+                        value={cant}
+                        onChange={(e) => setCantidades((prev) => ({ ...prev, [t.id]: Number(e.target.value) || 0 }))}
+                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-right text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                      />
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{planchas}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{unidades}</td>
+                  </tr>
+                );
+              })}
               <tr className="bg-slate-50 font-semibold text-slate-700">
                 <td className="px-4 py-2.5">Total clasificado</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{fmtNumero(totalClasificado)}</td>
-                <td className="px-4 py-2.5"></td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{Math.floor(totalClasificado / HUEVOS_POR_PLANCHA)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{totalClasificado % HUEVOS_POR_PLANCHA}</td>
               </tr>
             </tbody>
           </table>
         </div>
+        <p className="mt-2 text-[11px] text-slate-400">
+          1 plancha = {HUEVOS_POR_PLANCHA} huevos · las unidades son los sobrantes que no llenan una plancha completa.
+        </p>
 
         <div className="mt-5 flex items-center justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancelar</button>
