@@ -154,6 +154,20 @@ export async function PATCH(
       }
       const nuevoDetalle = body.detalle.filter((d) => d && d.tipo_huevo_id && Number(d.cantidad) > 0);
 
+      // Validar que el total clasificado no supere (cantidad_huevos - bajas) de la producción
+      const prodInfo = await supabase
+        .from("granja_producciones")
+        .select("cantidad_huevos, bajas")
+        .eq("id", clas.produccion_id)
+        .maybeSingle();
+      if (prodInfo.error) throw new Error(prodInfo.error.message);
+      const prodData = prodInfo.data as { cantidad_huevos: number; bajas: number } | null;
+      const disponible = prodData ? (prodData.cantidad_huevos - prodData.bajas) : 0;
+      const totalCant = nuevoDetalle.reduce((s, d) => s + Number(d.cantidad || 0), 0);
+      if (totalCant > disponible) {
+        return NextResponse.json(errorResponse(`El total clasificado (${totalCant}) supera los huevos disponibles (${disponible}) de la producción.`), { status: 400 });
+      }
+
       const tipoIds = Array.from(new Set(nuevoDetalle.map((d) => d.tipo_huevo_id)));
       const tiposQ = tipoIds.length > 0 ? await supabase
         .from("granja_tipos_huevo")

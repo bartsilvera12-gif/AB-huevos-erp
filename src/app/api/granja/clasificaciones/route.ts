@@ -125,6 +125,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse("Esta producción ya fue clasificada."), { status: 409 });
     }
 
+    // Si ya existe una clasificación en curso (cabecera sin detalle) para esta producción, la devolvemos
+    const existQ = await supabase
+      .from("granja_clasificaciones")
+      .select("id")
+      .eq("empresa_id", auth.empresa_id)
+      .eq("produccion_id", produccionId)
+      .maybeSingle();
+    if (existQ.data) {
+      return NextResponse.json(errorResponse("Ya hay una clasificación en curso para esta producción. Buscala en la lista y completá el detalle."), { status: 409 });
+    }
+
     const { data, error } = await supabase
       .from("granja_clasificaciones")
       .insert({

@@ -457,6 +457,13 @@ function ModalClasificacion({
 
   async function guardar() {
     setError(null);
+    if (porClasificar < 0) {
+      setError(`Clasificaste ${Math.abs(porClasificar)} huevos de más. Ajustá las cantidades.`);
+      return;
+    }
+    if (porClasificar > 0) {
+      if (!confirm(`Todavía quedan ${porClasificar} huevos sin clasificar. ¿Registrar igual?`)) return;
+    }
     setGuardando(true);
     const detalleArr: LineaClasificacion[] = tipos.map((t) => {
       const cant = cantidades[t.id] ?? 0;
@@ -491,6 +498,10 @@ function ModalClasificacion({
             highlight={porClasificar < 0 ? "rojo" : porClasificar === 0 ? "verde" : undefined}
           />
         </div>
+        <p className="mt-2 text-[11px] text-slate-500">
+          <strong>Por clasificar</strong> = Cantidad huevos ({fmtNumero(clasificacion.cantidad_huevos)}) − Bajas ({clasificacion.bajas}) − Total clasificado.
+          Tiene que llegar a 0 (verde) para poder registrar. Si es negativo (rojo), clasificaste más de lo disponible.
+        </p>
 
         <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
           <table className="w-full text-sm">
@@ -515,7 +526,8 @@ function ModalClasificacion({
                       <input
                         type="number"
                         min={0}
-                        value={cant}
+                        value={cant === 0 ? "" : cant}
+                        placeholder="0"
                         readOnly={clasificacion.stock_aplicado}
                         onChange={(e) => setCantidades((prev) => ({ ...prev, [t.id]: Number(e.target.value) || 0 }))}
                         className={`w-full rounded-md border px-2 py-1 text-right text-sm outline-none ${clasificacion.stock_aplicado ? "border-slate-200 bg-slate-50 text-slate-600" : "border-slate-300 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"}`}
@@ -845,12 +857,26 @@ function ModalNueva({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-slate-600">Fecha distribución</label>
-                <input
-                  type="datetime-local"
-                  value={fechaDist}
-                  onChange={(e) => setFechaDist(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                />
+                <div className="mt-1 flex gap-1">
+                  <input
+                    type="datetime-local"
+                    value={fechaDist}
+                    onChange={(e) => setFechaDist(e.target.value)}
+                    className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date();
+                      const pad = (n: number) => String(n).padStart(2, "0");
+                      setFechaDist(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
+                    }}
+                    className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    title="Ahora"
+                  >
+                    Hoy
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-600">Resp. distribución</label>
