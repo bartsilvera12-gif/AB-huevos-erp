@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Egg, ListChecks, Package, Layers, Sparkles, PiggyBank } from "lucide-react";
+import { Egg, ListChecks, Package, Layers, Sparkles, PiggyBank, Tags } from "lucide-react";
 
 /**
  * DEMO estática del módulo Clasificación de huevos — sin conexión a la DB.
@@ -239,7 +239,7 @@ export default function ClasificacionPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard label="Registros de producción" value={String(clasificaciones.length)} icon={<Layers className="h-5 w-5" />} tone="slate" />
         <KpiCard label="Total de huevos" value={fmtNumero(totalHuevos)} icon={<Egg className="h-5 w-5" />} tone="sky" />
-        <KpiCard label="Tipos de huevo definidos" value={String(tipos.length)} icon={<Sparkles className="h-5 w-5" />} tone="emerald" />
+        <KpiCard label="Tipos de huevo definidos" value={String(tipos.length)} icon={<Tags className="h-5 w-5" />} tone="emerald" />
       </div>
 
       {/* Huevos sueltos acumulados */}

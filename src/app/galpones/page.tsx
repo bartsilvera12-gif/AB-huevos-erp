@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Warehouse, Home, CheckCircle2, Users } from "lucide-react";
 import GranjaStepper from "@/components/granja/GranjaStepper";
 
 /**
- * DEMO estática del módulo Galpones — sin conexión a la DB.
- * Solo para revisar diseño e interacción antes de conectar backend.
+ * Módulo Galpones — conectado a la base de datos (abhuevos.granja_galpones).
  */
 
 type Galpon = {
@@ -17,13 +16,6 @@ type Galpon = {
   fecha_inicio: string | null; // YYYY-MM-DD
   fecha_fin: string | null;     // null = activo
 };
-
-const GALPONES_DEMO: Galpon[] = [
-  { id: "1", codigo: 1, nombre: "GALPON 1", inicial_gallinas: 10082, fecha_inicio: "2025-02-01", fecha_fin: null },
-  { id: "2", codigo: 2, nombre: "GALPON 2", inicial_gallinas: 12270, fecha_inicio: "2025-04-10", fecha_fin: null },
-  { id: "3", codigo: 3, nombre: "GALPON 3", inicial_gallinas: 29100, fecha_inicio: "2025-02-01", fecha_fin: null },
-  { id: "4", codigo: 4, nombre: "GALPON 4", inicial_gallinas: 16000, fecha_inicio: "2025-02-01", fecha_fin: "2026-01-15" },
-];
 
 function fmtFecha(iso: string | null): string {
   if (!iso) return "—";
@@ -36,10 +28,88 @@ function fmtNumero(n: number): string {
 }
 
 export default function GalponesPage() {
-  const [galpones, setGalpones] = useState<Galpon[]>(GALPONES_DEMO);
+  const [galpones, setGalpones] = useState<Galpon[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [modalOpen, setModalOpen] = useState<null | { modo: "nuevo" } | { modo: "editar"; g: Galpon }>(null);
   const [confirmarBorrar, setConfirmarBorrar] = useState<Galpon | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/granja/galpones", { credentials: "include", cache: "no-store" });
+        const j = await r.json().catch(() => ({}));
+        if (cancelado) return;
+        if (!r.ok || j?.success === false) {
+          setErrorCarga(j?.error ?? "No se pudieron cargar los galpones.");
+          return;
+        }
+        setGalpones((j?.data?.galpones ?? []) as Galpon[]);
+      } catch (e) {
+        if (!cancelado) setErrorCarga(e instanceof Error ? e.message : "Error de red.");
+      } finally {
+        if (!cancelado) setCargando(false);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, []);
+
+  async function crearOEditar(input: { modo: "nuevo" | "editar"; g: Galpon }): Promise<{ ok: boolean; error?: string }> {
+    setGuardando(true);
+    try {
+      const url = input.modo === "nuevo" ? "/api/granja/galpones" : `/api/granja/galpones/${encodeURIComponent(input.g.id)}`;
+      const method = input.modo === "nuevo" ? "POST" : "PATCH";
+      const r = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          nombre: input.g.nombre,
+          inicial_gallinas: input.g.inicial_gallinas,
+          fecha_inicio: input.g.fecha_inicio,
+          fecha_fin: input.g.fecha_fin,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.success === false) {
+        return { ok: false, error: j?.error ?? "No se pudo guardar." };
+      }
+      const nuevo = j?.data?.galpon as Galpon;
+      if (input.modo === "nuevo") {
+        setGalpones((prev) => [...prev, nuevo].sort((a, b) => a.codigo - b.codigo));
+      } else {
+        setGalpones((prev) => prev.map((x) => (x.id === nuevo.id ? nuevo : x)));
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Error de red." };
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function borrar(g: Galpon): Promise<{ ok: boolean; error?: string }> {
+    setGuardando(true);
+    try {
+      const r = await fetch(`/api/granja/galpones/${encodeURIComponent(g.id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.success === false) {
+        return { ok: false, error: j?.error ?? "No se pudo borrar." };
+      }
+      setGalpones((prev) => prev.filter((x) => x.id !== g.id));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Error de red." };
+    } finally {
+      setGuardando(false);
+    }
+  }
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -88,6 +158,12 @@ export default function GalponesPage() {
         <KpiCard label="Total gallinas iniciales" value={fmtNumero(totalGallinas)} icon={<Users className="h-5 w-5" />} tone="sky" />
       </div>
 
+      {errorCarga && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {errorCarga}
+        </div>
+      )}
+
       {/* Tabla */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4">
@@ -114,10 +190,16 @@ export default function GalponesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtrados.length === 0 ? (
+              {cargando ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-400 animate-pulse">
+                    Cargando galpones…
+                  </td>
+                </tr>
+              ) : filtrados.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-400">
-                    Sin galpones que coincidan.
+                    {galpones.length === 0 ? "Todavía no hay galpones registrados." : "Sin galpones que coincidan."}
                   </td>
                 </tr>
               ) : (
@@ -167,25 +249,19 @@ export default function GalponesPage() {
         </div>
       </div>
 
-      <p className="text-[11px] text-slate-400 italic">
-        Demo visual — los cambios no se guardan (todavía no está conectado a la base de datos).
-      </p>
 
       {/* Modal Nuevo / Editar */}
       {modalOpen && (
         <ModalFormulario
           modo={modalOpen.modo}
           galpon={modalOpen.modo === "editar" ? modalOpen.g : null}
+          guardando={guardando}
           onClose={() => setModalOpen(null)}
-          onGuardar={(g) => {
-            if (modalOpen.modo === "editar") {
-              setGalpones((prev) => prev.map((x) => (x.id === g.id ? g : x)));
-            } else {
-              const nextCodigo = galpones.length > 0 ? Math.max(...galpones.map((x) => x.codigo)) + 1 : 1;
-              setGalpones((prev) => [...prev, { ...g, id: crypto.randomUUID(), codigo: nextCodigo }]);
-            }
-            setModalOpen(null);
+          onGuardar={async (g) => {
+            const res = await crearOEditar({ modo: modalOpen.modo, g });
+            return res;
           }}
+          onSuccess={() => setModalOpen(null)}
         />
       )}
 
@@ -215,13 +291,15 @@ export default function GalponesPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setGalpones((prev) => prev.filter((x) => x.id !== confirmarBorrar.id));
-                  setConfirmarBorrar(null);
+                disabled={guardando}
+                onClick={async () => {
+                  const res = await borrar(confirmarBorrar);
+                  if (res.ok) setConfirmarBorrar(null);
+                  else alert(res.error);
                 }}
-                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700"
+                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-60"
               >
-                Borrar galpón
+                {guardando ? "Borrando…" : "Borrar galpón"}
               </button>
             </div>
           </div>
@@ -260,12 +338,14 @@ function KpiCard({ label, value, icon, tone = "slate" }: { label: string; value:
 }
 
 function ModalFormulario({
-  modo, galpon, onClose, onGuardar,
+  modo, galpon, guardando, onClose, onGuardar, onSuccess,
 }: {
   modo: "nuevo" | "editar";
   galpon: Galpon | null;
+  guardando: boolean;
   onClose: () => void;
-  onGuardar: (g: Galpon) => void;
+  onGuardar: (g: Galpon) => Promise<{ ok: boolean; error?: string }>;
+  onSuccess: () => void;
 }) {
   const [nombre, setNombre] = useState(galpon?.nombre ?? "");
   const [gallinas, setGallinas] = useState(galpon?.inicial_gallinas != null ? String(galpon.inicial_gallinas) : "");
@@ -273,11 +353,12 @@ function ModalFormulario({
   const [fechaFin, setFechaFin] = useState(galpon?.fecha_fin ?? "");
   const [error, setError] = useState<string | null>(null);
 
-  function guardar() {
+  async function guardar() {
     if (!nombre.trim()) { setError("El nombre es obligatorio."); return; }
     const n = Number(gallinas);
     if (!Number.isFinite(n) || n < 0) { setError("La cantidad de gallinas debe ser un número positivo."); return; }
-    onGuardar({
+    setError(null);
+    const res = await onGuardar({
       id: galpon?.id ?? "",
       codigo: galpon?.codigo ?? 0,
       nombre: nombre.trim().toUpperCase(),
@@ -285,6 +366,8 @@ function ModalFormulario({
       fecha_inicio: fechaInicio || null,
       fecha_fin: fechaFin || null,
     });
+    if (!res.ok) setError(res.error ?? "No se pudo guardar.");
+    else onSuccess();
   }
 
   return (
@@ -378,17 +461,19 @@ function ModalFormulario({
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
             type="button"
+            disabled={guardando}
             onClick={onClose}
-            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
             Cancelar
           </button>
           <button
             type="button"
+            disabled={guardando}
             onClick={guardar}
-            className="rounded-md bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#3F8E91]"
+            className="rounded-md bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#3F8E91] disabled:opacity-60"
           >
-            {modo === "nuevo" ? "Crear galpón" : "Guardar cambios"}
+            {guardando ? "Guardando…" : (modo === "nuevo" ? "Crear galpón" : "Guardar cambios")}
           </button>
         </div>
       </div>
