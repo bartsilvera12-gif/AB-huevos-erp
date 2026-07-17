@@ -137,6 +137,53 @@ export default function ClasificacionPage() {
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [tiposModalOpen, setTiposModalOpen] = useState(false);
 
+  // Acumulador de huevos sueltos por tipo. Cuando llega a 30, se convierte
+  // automáticamente en una plancha completa y va al stock de inventario.
+  const [acumulador, setAcumulador] = useState<Record<string, number>>({
+    t1: 15,  // Jumbo — 15/30
+    t2: 27,  // Super — 27/30 (casi lleno)
+    t3: 3,   // Tipo A — 3/30
+    t4: 0,   // Tipo B — vacío
+    t5: 12,  // Tipo C — 12/30
+    t6: 22,  // Picado — 22/30
+    t7: 0,   // Roto — sin definir aún
+    t8: 8,   // Sucio — 8/30
+  });
+  const [toastMensaje, setToastMensaje] = useState<string | null>(null);
+
+  /**
+   * Recibe cantidades por tipo (desde el modal de clasificación) y actualiza
+   * el acumulador. Si algún tipo llega o supera 30, arma planchas y muestra
+   * un toast con el resumen.
+   */
+  function procesarSueltos(cantidadesPorTipo: Record<string, number>) {
+    const planchasGeneradas: { tipo_nombre: string; planchas: number }[] = [];
+    setAcumulador((prev) => {
+      const next = { ...prev };
+      for (const [tipoId, cant] of Object.entries(cantidadesPorTipo)) {
+        const sobrantes = cant % HUEVOS_POR_PLANCHA;
+        if (sobrantes === 0) continue;
+        const acumNuevo = (next[tipoId] ?? 0) + sobrantes;
+        if (acumNuevo >= HUEVOS_POR_PLANCHA) {
+          const planchasExtra = Math.floor(acumNuevo / HUEVOS_POR_PLANCHA);
+          next[tipoId] = acumNuevo % HUEVOS_POR_PLANCHA;
+          const tipoNombre = tipos.find((t) => t.id === tipoId)?.nombre ?? tipoId;
+          planchasGeneradas.push({ tipo_nombre: tipoNombre, planchas: planchasExtra });
+        } else {
+          next[tipoId] = acumNuevo;
+        }
+      }
+      return next;
+    });
+    if (planchasGeneradas.length > 0) {
+      const detalle = planchasGeneradas
+        .map((p) => `${p.planchas} de ${p.tipo_nombre}`)
+        .join(" · ");
+      setToastMensaje(`✨ Se armaron planchas nuevas desde sueltos: ${detalle}`);
+      setTimeout(() => setToastMensaje(null), 6000);
+    }
+  }
+
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return clasificaciones;
@@ -194,6 +241,9 @@ export default function ClasificacionPage() {
         <KpiCard label="Total de huevos" value={fmtNumero(totalHuevos)} icon={<Egg className="h-5 w-5" />} tone="sky" />
         <KpiCard label="Tipos de huevo definidos" value={String(tipos.length)} icon={<Sparkles className="h-5 w-5" />} tone="emerald" />
       </div>
+
+      {/* Huevos sueltos acumulados */}
+      <SueltosPanel tipos={tipos} acumulador={acumulador} />
 
       {/* Tabla */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -266,6 +316,9 @@ export default function ClasificacionPage() {
           tipos={tipos}
           onClose={() => setEditando(null)}
           onGuardar={(c) => {
+            const cantidadesPorTipo: Record<string, number> = {};
+            for (const linea of c.detalle) cantidadesPorTipo[linea.tipo_id] = linea.cantidad;
+            procesarSueltos(cantidadesPorTipo);
             setClasificaciones((prev) => prev.map((x) => (x.id === c.id ? c : x)));
             setEditando(null);
           }}
@@ -300,6 +353,111 @@ export default function ClasificacionPage() {
           onClose={() => setTiposModalOpen(false)}
         />
       )}
+
+      {/* Toast planchas armadas desde sueltos */}
+      {toastMensaje && (
+        <div className="fixed bottom-6 right-6 z-[60] max-w-sm animate-in fade-in slide-in-from-bottom-4">
+          <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-2xl ring-1 ring-emerald-200/50">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-emerald-900">Planchas armadas automáticamente</p>
+                <p className="mt-0.5 text-xs text-emerald-800">{toastMensaje.replace("✨ Se armaron planchas nuevas desde sueltos: ", "")}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setToastMensaje(null)}
+                className="rounded-md p-1 text-emerald-600 hover:bg-emerald-100"
+                aria-label="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Panel: huevos sueltos acumulados ────────────────────────────────────── */
+
+function SueltosPanel({ tipos, acumulador }: { tipos: TipoHuevo[]; acumulador: Record<string, number> }) {
+  const totalSueltos = Object.values(acumulador).reduce((s, n) => s + (n || 0), 0);
+  const paletas: Record<string, { grad: string; text: string; bar: string; bg: string; border: string }> = {
+    // Se asigna una paleta por índice, ciclamos si hay más tipos.
+    "0": { grad: "from-amber-100 to-amber-50",     text: "text-amber-800",    bar: "bg-amber-500",     bg: "bg-amber-100",    border: "border-amber-200" },
+    "1": { grad: "from-sky-100 to-sky-50",         text: "text-sky-800",      bar: "bg-sky-500",       bg: "bg-sky-100",      border: "border-sky-200" },
+    "2": { grad: "from-emerald-100 to-emerald-50", text: "text-emerald-800",  bar: "bg-emerald-500",   bg: "bg-emerald-100",  border: "border-emerald-200" },
+    "3": { grad: "from-indigo-100 to-indigo-50",   text: "text-indigo-800",   bar: "bg-indigo-500",    bg: "bg-indigo-100",   border: "border-indigo-200" },
+    "4": { grad: "from-purple-100 to-purple-50",   text: "text-purple-800",   bar: "bg-purple-500",    bg: "bg-purple-100",   border: "border-purple-200" },
+    "5": { grad: "from-orange-100 to-orange-50",   text: "text-orange-800",   bar: "bg-orange-500",    bg: "bg-orange-100",   border: "border-orange-200" },
+    "6": { grad: "from-rose-100 to-rose-50",       text: "text-rose-800",     bar: "bg-rose-500",      bg: "bg-rose-100",     border: "border-rose-200" },
+    "7": { grad: "from-slate-100 to-slate-50",     text: "text-slate-800",    bar: "bg-slate-500",     bg: "bg-slate-100",    border: "border-slate-200" },
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-amber-100 to-amber-50 text-amber-700 ring-1 ring-amber-200/60">
+              <Sparkles className="h-3.5 w-3.5" />
+            </span>
+            Huevos sueltos acumulados
+          </h2>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Los sobrantes de cada clasificación se acumulan por tipo. Al llegar a 30, se arma una plancha automáticamente y va al inventario.
+          </p>
+        </div>
+        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+          {totalSueltos} sueltos en total
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        {tipos.map((t, idx) => {
+          const cant = acumulador[t.id] ?? 0;
+          const porcentaje = Math.min(100, (cant / HUEVOS_POR_PLANCHA) * 100);
+          const restan = Math.max(0, HUEVOS_POR_PLANCHA - cant);
+          const casiLleno = cant >= HUEVOS_POR_PLANCHA - 3 && cant > 0;
+          const p = paletas[String(idx % 8)];
+          return (
+            <div
+              key={t.id}
+              className={`rounded-xl border bg-gradient-to-br ${p.grad} ${p.border} p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className={`text-xs font-bold uppercase tracking-wide ${p.text}`}>{t.nombre}</p>
+                {casiLleno && (
+                  <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 ring-1 ring-amber-300/50 animate-pulse">
+                    ¡Casi!
+                  </span>
+                )}
+              </div>
+              <div className="mt-1.5 flex items-baseline gap-1">
+                <p className={`text-2xl font-bold tabular-nums leading-none ${p.text}`}>{cant}</p>
+                <p className={`text-[10px] font-medium ${p.text} opacity-70`}>/ 30 huevos</p>
+              </div>
+              <div className={`mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/60`}>
+                <div
+                  className={`h-full ${p.bar} transition-all duration-500 ease-out`}
+                  style={{ width: `${porcentaje}%` }}
+                />
+              </div>
+              <p className={`mt-1 text-[10px] ${p.text} opacity-80`}>
+                {cant === 0
+                  ? "Sin sueltos"
+                  : cant >= HUEVOS_POR_PLANCHA
+                    ? "¡Plancha lista!"
+                    : `Faltan ${restan} para plancha`}
+              </p>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
