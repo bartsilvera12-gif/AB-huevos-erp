@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Egg, ListChecks, Package, Layers, Sparkles } from "lucide-react";
+import { Egg, ListChecks, Package, Layers, Sparkles, PiggyBank } from "lucide-react";
 
 /**
  * DEMO estática del módulo Clasificación de huevos — sin conexión a la DB.
@@ -404,7 +404,7 @@ function SueltosPanel({ tipos, acumulador }: { tipos: TipoHuevo[]; acumulador: R
         <div>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-amber-100 to-amber-50 text-amber-700 ring-1 ring-amber-200/60">
-              <Sparkles className="h-3.5 w-3.5" />
+              <PiggyBank className="h-3.5 w-3.5" />
             </span>
             Huevos sueltos acumulados
           </h2>
