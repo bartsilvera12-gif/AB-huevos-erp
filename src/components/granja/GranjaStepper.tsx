@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Warehouse, ClipboardList, Egg, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Warehouse, ClipboardList, ArrowRight, CheckCircle2 } from "lucide-react";
 
-type StepKey = "galpones" | "produccion" | "clasificacion";
+type StepKey = "galpones" | "produccion";
 
 const STEPS: { key: StepKey; label: string; sub: string; href: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: "galpones",      label: "Galpones",      sub: "Infraestructura",        href: "/galpones",      icon: Warehouse },
-  { key: "produccion",    label: "Producción",    sub: "Recolección diaria",     href: "/produccion",    icon: ClipboardList },
-  { key: "clasificacion", label: "Clasificación", sub: "Desglose por tipo",      href: "/clasificacion", icon: Egg },
+  { key: "galpones",   label: "Galpones",   sub: "Infraestructura",    href: "/galpones",   icon: Warehouse },
+  { key: "produccion", label: "Producción", sub: "Recolección diaria", href: "/produccion", icon: ClipboardList },
 ];
 
 export default function GranjaStepper({ current }: { current: StepKey }) {
