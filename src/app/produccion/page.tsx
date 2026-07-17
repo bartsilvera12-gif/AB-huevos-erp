@@ -1,38 +1,27 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ClipboardList, Egg, TrendingDown, Layers } from "lucide-react";
 import GranjaStepper from "@/components/granja/GranjaStepper";
 
 /**
- * DEMO estática del módulo Producción — sin conexión a la DB.
- * Registra la recolección diaria de huevos por galpón, que después alimenta Clasificación.
+ * Módulo Producción — conectado a la base de datos.
+ * Fuente: abhuevos.granja_producciones (con join a granja_galpones para el nombre).
  */
 
 type Produccion = {
   id: string;
   codigo: number;
+  galpon_id: string;
   galpon: string;
   fecha: string;            // ISO datetime
   cantidad_huevos: number;
   bajas: number;
   responsable: string;
+  clasificada: boolean;
 };
 
-const GALPONES_OPCIONES = ["GALPON 1", "GALPON 2", "GALPON 3", "GALPON 4"];
-
-const PRODUCCIONES_DEMO: Produccion[] = [
-  { id: "p820", codigo: 820, galpon: "GALPON 4",        fecha: "2026-07-15T18:15:18", cantidad_huevos: 7590,  bajas: 0,   responsable: "espinola" },
-  { id: "p819", codigo: 819, galpon: "GALPON 3",        fecha: "2026-07-15T18:14:23", cantidad_huevos: 13498, bajas: 1,   responsable: "espinola" },
-  { id: "p818", codigo: 818, galpon: "GALPON 2",        fecha: "2026-07-15T18:12:31", cantidad_huevos: 4137,  bajas: 3,   responsable: "espinola" },
-  { id: "p817", codigo: 817, galpon: "GALPON 1",        fecha: "2026-07-15T18:11:15", cantidad_huevos: 68,    bajas: 507, responsable: "espinola" },
-  { id: "p816", codigo: 816, galpon: "GALPON 4",        fecha: "2026-07-14T18:06:14", cantidad_huevos: 7020,  bajas: 3,   responsable: "espinola" },
-  { id: "p815", codigo: 815, galpon: "GALPON 3",        fecha: "2026-07-14T18:05:05", cantidad_huevos: 13517, bajas: 2,   responsable: "espinola" },
-  { id: "p814", codigo: 814, galpon: "GALPON 2",        fecha: "2026-07-14T18:04:08", cantidad_huevos: 4330,  bajas: 2,   responsable: "espinola" },
-  { id: "p813", codigo: 813, galpon: "GALPON 1",        fecha: "2026-07-14T18:03:01", cantidad_huevos: 96,    bajas: 431, responsable: "espinola" },
-  { id: "p812", codigo: 812, galpon: "GALPON 4",        fecha: "2026-07-13T17:58:28", cantidad_huevos: 6030,  bajas: 1,   responsable: "espinola" },
-  { id: "p811", codigo: 811, galpon: "GALPON 3",        fecha: "2026-07-13T17:56:31", cantidad_huevos: 14004, bajas: 2,   responsable: "espinola" },
-];
+type GalponMini = { id: string; nombre: string; activo: boolean };
 
 function fmtNumero(n: number): string {
   return n.toLocaleString("es-PY");
@@ -52,18 +41,109 @@ function fmtFechaHora(iso: string | null): string {
   } catch { return iso; }
 }
 
-/** ISO datetime del "ahora" para prellenar formularios. */
+/** ISO datetime del "ahora" para prellenar formularios (formato datetime-local). */
 function ahoraIso(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+/** Convierte un ISO string a formato datetime-local (sin Z, con hora local). */
+function isoToLocal(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  } catch { return ahoraIso(); }
+}
+
 export default function ProduccionPage() {
-  const [producciones, setProducciones] = useState<Produccion[]>(PRODUCCIONES_DEMO);
+  const [producciones, setProducciones] = useState<Produccion[]>([]);
+  const [galponesLista, setGalponesLista] = useState<GalponMini[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [modalOpen, setModalOpen] = useState<null | { modo: "nuevo" } | { modo: "editar"; p: Produccion }>(null);
   const [confirmarBorrar, setConfirmarBorrar] = useState<Produccion | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      try {
+        const [rProd, rGalp] = await Promise.all([
+          fetch("/api/granja/producciones", { credentials: "include", cache: "no-store" }),
+          fetch("/api/granja/galpones", { credentials: "include", cache: "no-store" }),
+        ]);
+        const [jProd, jGalp] = await Promise.all([rProd.json().catch(() => ({})), rGalp.json().catch(() => ({}))]);
+        if (cancelado) return;
+        if (!rProd.ok || jProd?.success === false) {
+          setErrorCarga(jProd?.error ?? "No se pudieron cargar las producciones.");
+        } else {
+          setProducciones((jProd?.data?.producciones ?? []) as Produccion[]);
+        }
+        if (rGalp.ok && jGalp?.success !== false) {
+          setGalponesLista((jGalp?.data?.galpones ?? []) as GalponMini[]);
+        }
+      } catch (e) {
+        if (!cancelado) setErrorCarga(e instanceof Error ? e.message : "Error de red.");
+      } finally {
+        if (!cancelado) setCargando(false);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, []);
+
+  async function crearOEditar(input: { modo: "nuevo" | "editar"; p: Produccion }): Promise<{ ok: boolean; error?: string }> {
+    setGuardando(true);
+    try {
+      const url = input.modo === "nuevo" ? "/api/granja/producciones" : `/api/granja/producciones/${encodeURIComponent(input.p.id)}`;
+      const method = input.modo === "nuevo" ? "POST" : "PATCH";
+      const r = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          galpon_id: input.p.galpon_id,
+          fecha: input.p.fecha,
+          cantidad_huevos: input.p.cantidad_huevos,
+          bajas: input.p.bajas,
+          responsable: input.p.responsable,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.success === false) return { ok: false, error: j?.error ?? "No se pudo guardar." };
+      const nuevo = j?.data?.produccion as Produccion;
+      if (input.modo === "nuevo") {
+        setProducciones((prev) => [nuevo, ...prev]);
+      } else {
+        setProducciones((prev) => prev.map((x) => (x.id === nuevo.id ? nuevo : x)));
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Error de red." };
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function borrar(p: Produccion): Promise<{ ok: boolean; error?: string }> {
+    setGuardando(true);
+    try {
+      const r = await fetch(`/api/granja/producciones/${encodeURIComponent(p.id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.success === false) return { ok: false, error: j?.error ?? "No se pudo borrar." };
+      setProducciones((prev) => prev.filter((x) => x.id !== p.id));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Error de red." };
+    } finally {
+      setGuardando(false);
+    }
+  }
 
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -116,6 +196,12 @@ export default function ProduccionPage() {
         <KpiCard label="Total bajas" value={fmtNumero(totalBajas)} icon={<TrendingDown className="h-5 w-5" />} tone="rose" />
       </div>
 
+      {errorCarga && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {errorCarga}
+        </div>
+      )}
+
       {/* Tabla */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4">
@@ -142,10 +228,16 @@ export default function ProduccionPage() {
               </tr>
             </thead>
             <tbody>
-              {filtradas.length === 0 ? (
+              {cargando ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-400 animate-pulse">
+                    Cargando producciones…
+                  </td>
+                </tr>
+              ) : filtradas.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-400">
-                    Sin registros que coincidan.
+                    {producciones.length === 0 ? "Todavía no hay producciones registradas." : "Sin registros que coincidan."}
                   </td>
                 </tr>
               ) : (
@@ -183,25 +275,20 @@ export default function ProduccionPage() {
         </div>
       </div>
 
-      <p className="text-[11px] text-slate-400 italic">
-        Demo visual — los cambios no se guardan (todavía no está conectado a la base de datos).
-      </p>
 
       {/* Modal alta / edición */}
       {modalOpen && (
         <ModalProduccion
           modo={modalOpen.modo}
           produccion={modalOpen.modo === "editar" ? modalOpen.p : null}
+          galponesLista={galponesLista}
+          guardando={guardando}
           onClose={() => setModalOpen(null)}
-          onGuardar={(p) => {
-            if (modalOpen.modo === "editar") {
-              setProducciones((prev) => prev.map((x) => (x.id === p.id ? p : x)));
-            } else {
-              const nextCodigo = producciones.length > 0 ? Math.max(...producciones.map((x) => x.codigo)) + 1 : 1;
-              setProducciones((prev) => [{ ...p, id: crypto.randomUUID(), codigo: nextCodigo }, ...prev]);
-            }
-            setModalOpen(null);
+          onGuardar={async (p) => {
+            const res = await crearOEditar({ modo: modalOpen.modo, p });
+            return res;
           }}
+          onSuccess={() => setModalOpen(null)}
         />
       )}
 
@@ -218,26 +305,28 @@ export default function ProduccionPage() {
                 <p className="mt-1 text-sm text-slate-600">
                   Vas a borrar el registro <span className="font-semibold text-slate-900">#{confirmarBorrar.codigo}</span> — {confirmarBorrar.galpon} · {fmtFechaHora(confirmarBorrar.fecha)}.
                 </p>
-                <p className="mt-2 text-[11px] italic text-slate-400">Demo: solo lo saca de la lista visible.</p>
               </div>
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
               <button
                 type="button"
+                disabled={guardando}
                 onClick={() => setConfirmarBorrar(null)}
-                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setProducciones((prev) => prev.filter((x) => x.id !== confirmarBorrar.id));
-                  setConfirmarBorrar(null);
+                disabled={guardando}
+                onClick={async () => {
+                  const res = await borrar(confirmarBorrar);
+                  if (res.ok) setConfirmarBorrar(null);
+                  else alert(res.error);
                 }}
-                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700"
+                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-60"
               >
-                Borrar registro
+                {guardando ? "Borrando…" : "Borrar registro"}
               </button>
             </div>
           </div>
@@ -276,36 +365,45 @@ function KpiCard({ label, value, icon, tone = "slate" }: { label: string; value:
 }
 
 function ModalProduccion({
-  modo, produccion, onClose, onGuardar,
+  modo, produccion, galponesLista, guardando, onClose, onGuardar, onSuccess,
 }: {
   modo: "nuevo" | "editar";
   produccion: Produccion | null;
+  galponesLista: GalponMini[];
+  guardando: boolean;
   onClose: () => void;
-  onGuardar: (p: Produccion) => void;
+  onGuardar: (p: Produccion) => Promise<{ ok: boolean; error?: string }>;
+  onSuccess: () => void;
 }) {
-  const [galpon, setGalpon] = useState(produccion?.galpon ?? GALPONES_OPCIONES[0]);
-  const [fecha, setFecha] = useState(produccion?.fecha ?? ahoraIso());
+  const galponesElegibles = galponesLista.filter((g) => g.activo || g.id === produccion?.galpon_id);
+  const [galponId, setGalponId] = useState<string>(produccion?.galpon_id ?? galponesElegibles[0]?.id ?? "");
+  const [fecha, setFecha] = useState(produccion?.fecha ? isoToLocal(produccion.fecha) : ahoraIso());
   const [cantidad, setCantidad] = useState(produccion?.cantidad_huevos != null ? String(produccion.cantidad_huevos) : "");
   const [bajas, setBajas] = useState(produccion?.bajas != null ? String(produccion.bajas) : "0");
   const [responsable, setResponsable] = useState(produccion?.responsable ?? "");
   const [error, setError] = useState<string | null>(null);
 
-  function guardar() {
-    if (!galpon) { setError("Seleccioná un galpón."); return; }
+  async function guardar() {
+    if (!galponId) { setError("Seleccioná un galpón."); return; }
     const c = Number(cantidad);
     if (!Number.isFinite(c) || c < 0) { setError("La cantidad de huevos debe ser un número positivo."); return; }
     const b = Number(bajas);
     if (!Number.isFinite(b) || b < 0) { setError("Las bajas deben ser un número positivo o cero."); return; }
     if (!responsable.trim()) { setError("El responsable es obligatorio."); return; }
-    onGuardar({
+    setError(null);
+    const res = await onGuardar({
       id: produccion?.id ?? "",
       codigo: produccion?.codigo ?? 0,
-      galpon,
-      fecha: fecha || ahoraIso(),
+      galpon_id: galponId,
+      galpon: galponesLista.find((g) => g.id === galponId)?.nombre ?? "",
+      fecha: fecha ? new Date(fecha).toISOString() : new Date().toISOString(),
       cantidad_huevos: c,
       bajas: b,
       responsable: responsable.trim(),
+      clasificada: produccion?.clasificada ?? false,
     });
+    if (!res.ok) setError(res.error ?? "No se pudo guardar.");
+    else onSuccess();
   }
 
   return (
@@ -325,11 +423,13 @@ function ModalProduccion({
           <div>
             <label className="text-xs font-medium text-slate-600">Galpón *</label>
             <select
-              value={galpon}
-              onChange={(e) => setGalpon(e.target.value)}
+              value={galponId}
+              onChange={(e) => setGalponId(e.target.value)}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              disabled={galponesElegibles.length === 0}
             >
-              {GALPONES_OPCIONES.map((g) => <option key={g} value={g}>{g}</option>)}
+              {galponesElegibles.length === 0 && <option value="">No hay galpones disponibles</option>}
+              {galponesElegibles.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
             </select>
           </div>
 
@@ -389,17 +489,19 @@ function ModalProduccion({
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
             type="button"
+            disabled={guardando}
             onClick={onClose}
-            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
             Cancelar
           </button>
           <button
             type="button"
+            disabled={guardando}
             onClick={guardar}
-            className="rounded-md bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#3F8E91]"
+            className="rounded-md bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#3F8E91] disabled:opacity-60"
           >
-            {modo === "nuevo" ? "Registrar producción" : "Guardar cambios"}
+            {guardando ? "Guardando…" : (modo === "nuevo" ? "Registrar producción" : "Guardar cambios")}
           </button>
         </div>
       </div>
