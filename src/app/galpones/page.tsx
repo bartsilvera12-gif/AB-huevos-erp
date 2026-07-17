@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Warehouse } from "lucide-react";
+import { Warehouse, Home, CheckCircle2, Users } from "lucide-react";
 
 /**
  * DEMO estática del módulo Galpones — sin conexión a la DB.
@@ -51,23 +51,27 @@ export default function GalponesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-[#4FAEB2]/[0.02] to-[#4FAEB2]/[0.05] p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-1">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" style={{ boxShadow: "0 0 0 3px rgba(79,174,178,0.18)" }} />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#4FAEB2]">Zentra · Operaciones</p>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4FAEB2]/30 bg-[#4FAEB2]/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#3F8E91]">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" />
+            Zentra · Operaciones
+          </span>
         </div>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-              <Warehouse className="h-6 w-6 text-[#4FAEB2]" />
+            <h1 className="flex items-center gap-2.5 text-2xl font-bold text-slate-900">
+              <span className="rounded-lg bg-white p-1.5 ring-1 ring-[#4FAEB2]/20 shadow-sm">
+                <Warehouse className="h-5 w-5 text-[#4FAEB2]" />
+              </span>
               Galpones
             </h1>
-            <p className="mt-0.5 text-sm text-slate-500">Gestión de lotes de gallinas ponedoras por galpón.</p>
+            <p className="mt-1 text-sm text-slate-500">Gestión de lotes de gallinas ponedoras por galpón.</p>
           </div>
           <button
             type="button"
             onClick={() => setModalOpen({ modo: "nuevo" })}
-            className="rounded-lg bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/25 transition-colors hover:bg-[#3F8E91]"
+            className="rounded-lg bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/30 ring-1 ring-white/10 transition-all hover:shadow-md hover:from-[#3F8E91] hover:to-[#357577] active:scale-[.98]"
           >
             + Nuevo galpón
           </button>
@@ -76,9 +80,9 @@ export default function GalponesPage() {
 
       {/* KPIs rápidos */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <KpiCard label="Total de galpones" value={String(galpones.length)} />
-        <KpiCard label="Galpones activos" value={String(totalActivos)} accentColor="#22c55e" />
-        <KpiCard label="Total gallinas iniciales" value={fmtNumero(totalGallinas)} />
+        <KpiCard label="Total de galpones" value={String(galpones.length)} icon={<Home className="h-5 w-5" />} tone="slate" />
+        <KpiCard label="Galpones activos" value={String(totalActivos)} icon={<CheckCircle2 className="h-5 w-5" />} tone="emerald" />
+        <KpiCard label="Total gallinas iniciales" value={fmtNumero(totalGallinas)} icon={<Users className="h-5 w-5" />} tone="sky" />
       </div>
 
       {/* Tabla */}
@@ -224,11 +228,30 @@ export default function GalponesPage() {
   );
 }
 
-function KpiCard({ label, value, accentColor }: { label: string; value: string; accentColor?: string }) {
+type KpiTone = "slate" | "sky" | "emerald" | "rose" | "amber";
+const KPI_TONES: Record<KpiTone, { bg: string; icon: string; value: string; ring: string }> = {
+  slate:   { bg: "bg-slate-100",   icon: "text-slate-600",   value: "text-slate-900",  ring: "ring-slate-200/60" },
+  sky:     { bg: "bg-sky-100",     icon: "text-sky-600",     value: "text-sky-700",    ring: "ring-sky-200/60"   },
+  emerald: { bg: "bg-emerald-100", icon: "text-emerald-600", value: "text-emerald-700",ring: "ring-emerald-200/60" },
+  rose:    { bg: "bg-rose-100",    icon: "text-rose-600",    value: "text-rose-700",   ring: "ring-rose-200/60"  },
+  amber:   { bg: "bg-amber-100",   icon: "text-amber-700",   value: "text-amber-800",  ring: "ring-amber-200/60" },
+};
+
+function KpiCard({ label, value, icon, tone = "slate" }: { label: string; value: string; icon?: React.ReactNode; tone?: KpiTone }) {
+  const t = KPI_TONES[tone];
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums" style={{ color: accentColor ?? "#0f172a" }}>{value}</p>
+    <div className={`group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ring-1 transition-all hover:shadow-md hover:-translate-y-0.5 ${t.ring}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
+          <p className={`mt-2 text-3xl font-bold tabular-nums leading-none ${t.value}`}>{value}</p>
+        </div>
+        {icon && (
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${t.bg} ${t.icon} transition-transform group-hover:scale-110`}>
+            {icon}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Egg, ListChecks } from "lucide-react";
+import { Egg, ListChecks, Package, Layers, Sparkles } from "lucide-react";
 
 /**
  * DEMO estática del módulo Clasificación de huevos — sin conexión a la DB.
@@ -134,6 +134,7 @@ export default function ClasificacionPage() {
   const [tipos, setTipos] = useState<TipoHuevo[]>(TIPOS_DEMO);
   const [busqueda, setBusqueda] = useState("");
   const [editando, setEditando] = useState<Clasificacion | null>(null);
+  const [nuevaOpen, setNuevaOpen] = useState(false);
   const [tiposModalOpen, setTiposModalOpen] = useState(false);
 
   const filtradas = useMemo(() => {
@@ -150,31 +151,36 @@ export default function ClasificacionPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-[#4FAEB2]/[0.02] to-[#4FAEB2]/[0.05] p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-1">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" style={{ boxShadow: "0 0 0 3px rgba(79,174,178,0.18)" }} />
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#4FAEB2]">Zentra · Operaciones</p>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4FAEB2]/30 bg-[#4FAEB2]/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#3F8E91]">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" />
+            Zentra · Operaciones
+          </span>
         </div>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-              <Egg className="h-6 w-6 text-[#4FAEB2]" />
+            <h1 className="flex items-center gap-2.5 text-2xl font-bold text-slate-900">
+              <span className="rounded-lg bg-white p-1.5 ring-1 ring-[#4FAEB2]/20 shadow-sm">
+                <Egg className="h-5 w-5 text-[#4FAEB2]" />
+              </span>
               Clasificación de huevos
             </h1>
-            <p className="mt-0.5 text-sm text-slate-500">Registro de producción diaria y clasificación por tipo.</p>
+            <p className="mt-1 text-sm text-slate-500">Registro de producción diaria y clasificación por tipo.</p>
           </div>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setTiposModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 hover:shadow"
             >
               <ListChecks className="h-4 w-4" />
               Tipos de huevos
             </button>
             <button
               type="button"
-              className="rounded-lg bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/25 transition-colors hover:bg-[#3F8E91]"
+              onClick={() => setNuevaOpen(true)}
+              className="rounded-lg bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/30 ring-1 ring-white/10 transition-all hover:shadow-md hover:from-[#3F8E91] hover:to-[#357577] active:scale-[.98]"
             >
               + Nueva clasificación
             </button>
@@ -184,9 +190,9 @@ export default function ClasificacionPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <KpiCard label="Registros de producción" value={String(clasificaciones.length)} />
-        <KpiCard label="Total de huevos" value={fmtNumero(totalHuevos)} accentColor="#0EA5E9" />
-        <KpiCard label="Tipos de huevo definidos" value={String(tipos.length)} />
+        <KpiCard label="Registros de producción" value={String(clasificaciones.length)} icon={<Layers className="h-5 w-5" />} tone="slate" />
+        <KpiCard label="Total de huevos" value={fmtNumero(totalHuevos)} icon={<Egg className="h-5 w-5" />} tone="sky" />
+        <KpiCard label="Tipos de huevo definidos" value={String(tipos.length)} icon={<Sparkles className="h-5 w-5" />} tone="emerald" />
       </div>
 
       {/* Tabla */}
@@ -266,6 +272,26 @@ export default function ClasificacionPage() {
         />
       )}
 
+      {/* Modal nueva clasificación */}
+      {nuevaOpen && (
+        <ModalNueva
+          onClose={() => setNuevaOpen(false)}
+          onCrear={(base) => {
+            const nextCodigo = clasificaciones.length > 0 ? Math.max(...clasificaciones.map((c) => c.codigo)) + 1 : 1;
+            const nueva: Clasificacion = {
+              ...base,
+              id: crypto.randomUUID(),
+              codigo: nextCodigo,
+              detalle: [],
+            };
+            setClasificaciones((prev) => [nueva, ...prev]);
+            setNuevaOpen(false);
+            // Abrimos directamente el modal de clasificación para completar el desglose.
+            setEditando(nueva);
+          }}
+        />
+      )}
+
       {/* Modal catálogo tipos */}
       {tiposModalOpen && (
         <ModalTipos
@@ -278,11 +304,30 @@ export default function ClasificacionPage() {
   );
 }
 
-function KpiCard({ label, value, accentColor }: { label: string; value: string; accentColor?: string }) {
+type KpiTone = "slate" | "sky" | "emerald" | "rose" | "amber";
+const KPI_TONES: Record<KpiTone, { bg: string; icon: string; value: string; ring: string }> = {
+  slate:   { bg: "bg-slate-100",   icon: "text-slate-600",   value: "text-slate-900",  ring: "ring-slate-200/60" },
+  sky:     { bg: "bg-sky-100",     icon: "text-sky-600",     value: "text-sky-700",    ring: "ring-sky-200/60"   },
+  emerald: { bg: "bg-emerald-100", icon: "text-emerald-600", value: "text-emerald-700",ring: "ring-emerald-200/60" },
+  rose:    { bg: "bg-rose-100",    icon: "text-rose-600",    value: "text-rose-700",   ring: "ring-rose-200/60"  },
+  amber:   { bg: "bg-amber-100",   icon: "text-amber-700",   value: "text-amber-800",  ring: "ring-amber-200/60" },
+};
+
+function KpiCard({ label, value, icon, tone = "slate" }: { label: string; value: string; icon?: React.ReactNode; tone?: KpiTone }) {
+  const t = KPI_TONES[tone];
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums" style={{ color: accentColor ?? "#0f172a" }}>{value}</p>
+    <div className={`group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ring-1 transition-all hover:shadow-md hover:-translate-y-0.5 ${t.ring}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
+          <p className={`mt-2 text-3xl font-bold tabular-nums leading-none ${t.value}`}>{value}</p>
+        </div>
+        {icon && (
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${t.bg} ${t.icon} transition-transform group-hover:scale-110`}>
+            {icon}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -544,3 +589,170 @@ function ModalTipos({
     </div>
   );
 }
+
+/* ─── MODAL: nueva clasificación (paso 1: cabecera) ──────────────────────── */
+
+const GALPONES_OPCIONES_CLAS = ["GALPON 1", "GALPON 2", "GALPON 3", "GALPON 4"];
+
+function ahoraIsoLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function ModalNueva({
+  onClose, onCrear,
+}: {
+  onClose: () => void;
+  onCrear: (base: Omit<Clasificacion, "id" | "codigo" | "detalle">) => void;
+}) {
+  const [galpon, setGalpon] = useState(GALPONES_OPCIONES_CLAS[0]);
+  const [fecha, setFecha] = useState(ahoraIsoLocal());
+  const [cantidad, setCantidad] = useState("");
+  const [bajas, setBajas] = useState("0");
+  const [responsable, setResponsable] = useState("");
+  const [fechaDist, setFechaDist] = useState("");
+  const [respDist, setRespDist] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function crear() {
+    if (!galpon) { setError("Seleccioná un galpón."); return; }
+    const c = Number(cantidad);
+    if (!Number.isFinite(c) || c <= 0) { setError("La cantidad de huevos debe ser mayor a 0."); return; }
+    const b = Number(bajas);
+    if (!Number.isFinite(b) || b < 0) { setError("Las bajas deben ser un número positivo o cero."); return; }
+    if (!responsable.trim()) { setError("El responsable es obligatorio."); return; }
+    onCrear({
+      galpon,
+      fecha: fecha || ahoraIsoLocal(),
+      cantidad_huevos: c,
+      bajas: b,
+      responsable: responsable.trim(),
+      fecha_distribucion: fechaDist || null,
+      resp_distribucion: respDist.trim(),
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 px-4 py-8 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Nueva clasificación</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Paso 1 — cargá los datos base. Después vas a clasificar por tipo.</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-md p-1 text-slate-400 hover:bg-slate-100">✕</button>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600">Galpón *</label>
+              <select
+                value={galpon}
+                onChange={(e) => setGalpon(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              >
+                {GALPONES_OPCIONES_CLAS.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Fecha y hora *</label>
+              <input
+                type="datetime-local"
+                step={1}
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600">Cantidad huevos *</label>
+              <input
+                type="number"
+                min={0}
+                value={cantidad}
+                onChange={(e) => setCantidad(e.target.value)}
+                placeholder="Ej: 9780"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Bajas</label>
+              <input
+                type="number"
+                min={0}
+                value={bajas}
+                onChange={(e) => setBajas(e.target.value)}
+                placeholder="0"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-600">Responsable *</label>
+            <input
+              type="text"
+              value={responsable}
+              onChange={(e) => setResponsable(e.target.value)}
+              placeholder="Ej: luzovelar"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            />
+          </div>
+
+          <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Distribución (opcional)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-slate-600">Fecha distribución</label>
+                <input
+                  type="datetime-local"
+                  step={1}
+                  value={fechaDist}
+                  onChange={(e) => setFechaDist(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Resp. distribución</label>
+                <input
+                  type="text"
+                  value={respDist}
+                  onChange={(e) => setRespDist(e.target.value)}
+                  placeholder="Ej: luzovelar"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>
+          )}
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={crear}
+            className="rounded-md bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md active:scale-[.98]"
+          >
+            Continuar a clasificar →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
