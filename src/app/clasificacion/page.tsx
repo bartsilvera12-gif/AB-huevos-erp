@@ -486,11 +486,14 @@ function ModalClasificacion({
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-md p-1 text-slate-400 hover:bg-slate-100">✕</button>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <ReadonlyField label="Galpón" value={clasificacion.galpon} />
           <ReadonlyField label="Fecha" value={fmtFechaHora(clasificacion.fecha)} />
-          <ReadonlyField label="Cantidad huevos" value={fmtNumero(clasificacion.cantidad_huevos)} align="right" />
-          <ReadonlyField label="Cantidad bajas" value={String(clasificacion.bajas)} align="right" />
+          <ReadonlyField
+            label="Huevos a clasificar"
+            value={fmtNumero(clasificacion.cantidad_huevos - clasificacion.bajas)}
+            align="right"
+          />
           <ReadonlyField
             label="Por clasificar"
             value={fmtNumero(porClasificar)}
@@ -499,8 +502,8 @@ function ModalClasificacion({
           />
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
-          <strong>Por clasificar</strong> = Cantidad huevos ({fmtNumero(clasificacion.cantidad_huevos)}) − Bajas ({clasificacion.bajas}) − Total clasificado.
-          Tiene que llegar a 0 (verde) para poder registrar. Si es negativo (rojo), clasificaste más de lo disponible.
+          Se recolectaron <strong>{fmtNumero(clasificacion.cantidad_huevos)}</strong> huevos, de los cuales <strong>{clasificacion.bajas}</strong> quedaron como bajas (rotos/descartados).
+          Quedan <strong>{fmtNumero(clasificacion.cantidad_huevos - clasificacion.bajas)}</strong> para clasificar por tipo. <strong>Por clasificar</strong> tiene que llegar a 0 para registrar.
         </p>
 
         <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
