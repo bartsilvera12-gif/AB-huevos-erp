@@ -4,14 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Egg, ListChecks, Layers, Sparkles, PiggyBank, Tags } from "lucide-react";
 
 type TipoHuevo = { id: string; codigo: number; nombre: string; producto_id?: string | null };
-type GalponOpt = { id: string; nombre: string };
+type ProduccionOpt = { id: string; codigo: number; galpon: string; fecha: string; cantidad_huevos: number; bajas: number; responsable: string };
 type ProductoOpt = { id: string; nombre: string; sku: string | null };
 
 type LineaClasificacion = {
-  tipo_id: string;
+  tipo_huevo_id: string;
   cantidad: number;
-  planchas: number;
-  unidades: number;
+  planchas_generadas: number;
+  unidades_sobrantes: number;
 };
 
 const HUEVOS_POR_PLANCHA = 30;
@@ -22,6 +22,7 @@ function calcularPlanchasUnidades(cantidad: number): { planchas: number; unidade
 
 type Clasificacion = {
   id: string;
+  produccion_id: string;
   codigo: number;
   galpon_id: string;
   galpon: string;
@@ -52,19 +53,10 @@ function fmtFechaHora(iso: string | null): string {
   } catch { return iso; }
 }
 
-function isoToLocal(iso: string | null): string {
-  if (!iso) return "";
-  try {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  } catch { return ""; }
-}
-
 export default function ClasificacionPage() {
   const [clasificaciones, setClasificaciones] = useState<Clasificacion[]>([]);
   const [tipos, setTipos] = useState<TipoHuevo[]>([]);
-  const [galpones, setGalpones] = useState<GalponOpt[]>([]);
+  const [produccionesSinClasificar, setProduccionesSinClasificar] = useState<ProduccionOpt[]>([]);
   const [productos, setProductos] = useState<ProductoOpt[]>([]);
   const [acumulador, setAcumulador] = useState<Record<string, number>>({});
   const [cargando, setCargando] = useState(true);
@@ -80,21 +72,22 @@ export default function ClasificacionPage() {
     setCargando(true);
     setErrorGeneral(null);
     try {
-      const [rC, rT, rG, rS, rP] = await Promise.all([
+      const [rC, rT, rPr, rS, rP] = await Promise.all([
         fetch("/api/granja/clasificaciones", { cache: "no-store" }),
         fetch("/api/granja/tipos-huevo", { cache: "no-store" }),
-        fetch("/api/granja/galpones", { cache: "no-store" }),
+        fetch("/api/granja/producciones", { cache: "no-store" }),
         fetch("/api/granja/sueltos", { cache: "no-store" }),
         fetch("/api/productos", { cache: "no-store" }),
       ]);
-      const [jC, jT, jG, jS, jP] = await Promise.all([rC.json(), rT.json(), rG.json(), rS.json(), rP.json()]);
-      if (!rC.ok) throw new Error(jC?.error?.message ?? "Error cargando clasificaciones");
-      if (!rT.ok) throw new Error(jT?.error?.message ?? "Error cargando tipos");
-      if (!rG.ok) throw new Error(jG?.error?.message ?? "Error cargando galpones");
-      if (!rS.ok) throw new Error(jS?.error?.message ?? "Error cargando sueltos");
+      const [jC, jT, jPr, jS, jP] = await Promise.all([rC.json(), rT.json(), rPr.json(), rS.json(), rP.json()]);
+      if (!rC.ok) throw new Error(jC?.error?.message ?? jC?.error ?? "Error cargando clasificaciones");
+      if (!rT.ok) throw new Error(jT?.error?.message ?? jT?.error ?? "Error cargando tipos");
+      if (!rPr.ok) throw new Error(jPr?.error?.message ?? jPr?.error ?? "Error cargando producciones");
+      if (!rS.ok) throw new Error(jS?.error?.message ?? jS?.error ?? "Error cargando sueltos");
       setClasificaciones(jC.data?.clasificaciones ?? []);
       setTipos(jT.data?.tipos ?? []);
-      setGalpones((jG.data?.galpones ?? []).map((g: { id: string; nombre: string }) => ({ id: g.id, nombre: g.nombre })));
+      const producciones = (jPr.data?.producciones ?? []) as Array<{ id: string; codigo: number; galpon: string; fecha: string; cantidad_huevos: number; bajas: number; responsable: string; clasificada?: boolean }>;
+      setProduccionesSinClasificar(producciones.filter((p) => !p.clasificada));
       setAcumulador(jS.data?.acumulador ?? {});
       if (rP.ok) {
         setProductos((jP.data?.productos ?? []).map((p: { id: string; nombre: string; sku: string | null }) => ({ id: p.id, nombre: p.nombre, sku: p.sku })));
@@ -108,20 +101,18 @@ export default function ClasificacionPage() {
 
   useEffect(() => { cargarTodo(); }, []);
 
-  async function crearCabecera(base: {
-    galpon_id: string; fecha: string; cantidad_huevos: number; bajas: number;
-    responsable: string; fecha_distribucion: string | null; resp_distribucion: string;
-  }): Promise<{ ok: boolean; error?: string; clasificacion?: Clasificacion }> {
+  async function crearCabecera(produccion_id: string, resp_distribucion: string, fecha_distribucion: string | null): Promise<{ ok: boolean; error?: string; clasificacion?: Clasificacion }> {
     try {
       const r = await fetch("/api/granja/clasificaciones", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(base),
+        body: JSON.stringify({ produccion_id, resp_distribucion, fecha_distribucion }),
       });
       const j = await r.json();
-      if (!r.ok) return { ok: false, error: j?.error?.message ?? "Error al crear" };
+      if (!r.ok) return { ok: false, error: j?.error?.message ?? j?.error ?? "Error al crear" };
       const c = j.data?.clasificacion as Clasificacion;
       setClasificaciones((prev) => [c, ...prev]);
+      setProduccionesSinClasificar((prev) => prev.filter((p) => p.id !== produccion_id));
       return { ok: true, clasificacion: c };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "Error" };
@@ -134,21 +125,20 @@ export default function ClasificacionPage() {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          detalle: detalle.map((d) => ({ tipo_id: d.tipo_id, cantidad: d.cantidad })),
+          detalle: detalle.map((d) => ({ tipo_huevo_id: d.tipo_huevo_id, cantidad: d.cantidad })),
         }),
       });
       const j = await r.json();
-      if (!r.ok) return { ok: false, error: j?.error?.message ?? "Error al guardar" };
-      const planchas = (j.data?.planchas_generadas ?? []) as Array<{ tipo_id: string; planchas: number }>;
+      if (!r.ok) return { ok: false, error: j?.error?.message ?? j?.error ?? "Error al guardar" };
+      const planchas = (j.data?.planchas_generadas ?? []) as Array<{ tipo_huevo_id: string; planchas: number }>;
       if (planchas.length > 0) {
         const detTxt = planchas.map((p) => {
-          const nombre = tipos.find((t) => t.id === p.tipo_id)?.nombre ?? p.tipo_id;
+          const nombre = tipos.find((t) => t.id === p.tipo_huevo_id)?.nombre ?? p.tipo_huevo_id;
           return `${p.planchas} de ${nombre}`;
         }).join(" · ");
         setToastMensaje(detTxt);
         setTimeout(() => setToastMensaje(null), 6000);
       }
-      // Refrescar clasificaciones y sueltos
       await cargarTodo();
       return { ok: true };
     } catch (e) {
@@ -199,7 +189,9 @@ export default function ClasificacionPage() {
             <button
               type="button"
               onClick={() => setNuevaOpen(true)}
-              className="rounded-lg bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/30 ring-1 ring-white/10 transition-all hover:shadow-md hover:from-[#3F8E91] hover:to-[#357577] active:scale-[.98]"
+              disabled={produccionesSinClasificar.length === 0}
+              className="rounded-lg bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/30 ring-1 ring-white/10 transition-all hover:shadow-md hover:from-[#3F8E91] hover:to-[#357577] active:scale-[.98] disabled:opacity-60 disabled:cursor-not-allowed"
+              title={produccionesSinClasificar.length === 0 ? "No hay producciones sin clasificar" : ""}
             >
               + Nueva clasificación
             </button>
@@ -298,10 +290,10 @@ export default function ClasificacionPage() {
 
       {nuevaOpen && (
         <ModalNueva
-          galpones={galpones}
+          producciones={produccionesSinClasificar}
           onClose={() => setNuevaOpen(false)}
-          onCrear={async (base) => {
-            const r = await crearCabecera(base);
+          onCrear={async (produccionId, respDist, fechaDist) => {
+            const r = await crearCabecera(produccionId, respDist, fechaDist);
             if (r.ok && r.clasificacion) {
               setNuevaOpen(false);
               setEditando(r.clasificacion);
@@ -331,14 +323,7 @@ export default function ClasificacionPage() {
                 <p className="text-sm font-semibold text-emerald-900">Planchas armadas automáticamente</p>
                 <p className="mt-0.5 text-xs text-emerald-800">{toastMensaje}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setToastMensaje(null)}
-                className="rounded-md p-1 text-emerald-600 hover:bg-emerald-100"
-                aria-label="Cerrar"
-              >
-                ✕
-              </button>
+              <button type="button" onClick={() => setToastMensaje(null)} className="rounded-md p-1 text-emerald-600 hover:bg-emerald-100" aria-label="Cerrar">✕</button>
             </div>
           </div>
         </div>
@@ -349,15 +334,15 @@ export default function ClasificacionPage() {
 
 function SueltosPanel({ tipos, acumulador }: { tipos: TipoHuevo[]; acumulador: Record<string, number> }) {
   const totalSueltos = Object.values(acumulador).reduce((s, n) => s + (n || 0), 0);
-  const paletas: Record<string, { grad: string; text: string; bar: string; bg: string; border: string }> = {
-    "0": { grad: "from-amber-100 to-amber-50",     text: "text-amber-800",    bar: "bg-amber-500",     bg: "bg-amber-100",    border: "border-amber-200" },
-    "1": { grad: "from-sky-100 to-sky-50",         text: "text-sky-800",      bar: "bg-sky-500",       bg: "bg-sky-100",      border: "border-sky-200" },
-    "2": { grad: "from-emerald-100 to-emerald-50", text: "text-emerald-800",  bar: "bg-emerald-500",   bg: "bg-emerald-100",  border: "border-emerald-200" },
-    "3": { grad: "from-indigo-100 to-indigo-50",   text: "text-indigo-800",   bar: "bg-indigo-500",    bg: "bg-indigo-100",   border: "border-indigo-200" },
-    "4": { grad: "from-purple-100 to-purple-50",   text: "text-purple-800",   bar: "bg-purple-500",    bg: "bg-purple-100",   border: "border-purple-200" },
-    "5": { grad: "from-orange-100 to-orange-50",   text: "text-orange-800",   bar: "bg-orange-500",    bg: "bg-orange-100",   border: "border-orange-200" },
-    "6": { grad: "from-rose-100 to-rose-50",       text: "text-rose-800",     bar: "bg-rose-500",      bg: "bg-rose-100",     border: "border-rose-200" },
-    "7": { grad: "from-slate-100 to-slate-50",     text: "text-slate-800",    bar: "bg-slate-500",     bg: "bg-slate-100",    border: "border-slate-200" },
+  const paletas: Record<string, { grad: string; text: string; bar: string; border: string }> = {
+    "0": { grad: "from-amber-100 to-amber-50",     text: "text-amber-800",    bar: "bg-amber-500",    border: "border-amber-200" },
+    "1": { grad: "from-sky-100 to-sky-50",         text: "text-sky-800",      bar: "bg-sky-500",      border: "border-sky-200" },
+    "2": { grad: "from-emerald-100 to-emerald-50", text: "text-emerald-800",  bar: "bg-emerald-500",  border: "border-emerald-200" },
+    "3": { grad: "from-indigo-100 to-indigo-50",   text: "text-indigo-800",   bar: "bg-indigo-500",   border: "border-indigo-200" },
+    "4": { grad: "from-purple-100 to-purple-50",   text: "text-purple-800",   bar: "bg-purple-500",   border: "border-purple-200" },
+    "5": { grad: "from-orange-100 to-orange-50",   text: "text-orange-800",   bar: "bg-orange-500",   border: "border-orange-200" },
+    "6": { grad: "from-rose-100 to-rose-50",       text: "text-rose-800",     bar: "bg-rose-500",     border: "border-rose-200" },
+    "7": { grad: "from-teal-100 to-teal-50",       text: "text-teal-800",     bar: "bg-teal-500",     border: "border-teal-200" },
   };
 
   return (
@@ -403,7 +388,7 @@ function SueltosPanel({ tipos, acumulador }: { tipos: TipoHuevo[]; acumulador: R
                   <p className={`text-2xl font-bold tabular-nums leading-none ${p.text}`}>{cant}</p>
                   <p className={`text-[10px] font-medium ${p.text} opacity-70`}>/ 30 huevos</p>
                 </div>
-                <div className={`mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/60`}>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/60">
                   <div className={`h-full ${p.bar} transition-all duration-500 ease-out`} style={{ width: `${porcentaje}%` }} />
                 </div>
                 <p className={`mt-1 text-[10px] ${p.text} opacity-80`}>
@@ -446,7 +431,7 @@ function KpiCard({ label, value, icon, tone = "slate" }: { label: string; value:
   );
 }
 
-/* ─── MODAL: editar clasificación (detalle por tipo) ────────────────────── */
+/* ─── MODAL: clasificar detalle ───────────────────────────────────────────── */
 
 function ModalClasificacion({
   clasificacion, tipos, onClose, onGuardar,
@@ -459,7 +444,7 @@ function ModalClasificacion({
   const [cantidades, setCantidades] = useState<Record<string, number>>(() => {
     const base: Record<string, number> = {};
     for (const t of tipos) {
-      const existente = clasificacion.detalle.find((d) => d.tipo_id === t.id);
+      const existente = clasificacion.detalle.find((d) => d.tipo_huevo_id === t.id);
       base[t.id] = existente?.cantidad ?? 0;
     }
     return base;
@@ -476,7 +461,7 @@ function ModalClasificacion({
     const detalleArr: LineaClasificacion[] = tipos.map((t) => {
       const cant = cantidades[t.id] ?? 0;
       const { planchas, unidades } = calcularPlanchasUnidades(cant);
-      return { tipo_id: t.id, cantidad: cant, planchas, unidades };
+      return { tipo_huevo_id: t.id, cantidad: cant, planchas_generadas: planchas, unidades_sobrantes: unidades };
     }).filter((d) => d.cantidad > 0);
     const r = await onGuardar(detalleArr);
     setGuardando(false);
@@ -489,7 +474,7 @@ function ModalClasificacion({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Registro de clasificación</h3>
-            <p className="mt-0.5 text-xs text-slate-500">Editando registro #{clasificacion.codigo} — {clasificacion.galpon}</p>
+            <p className="mt-0.5 text-xs text-slate-500">Producción #{clasificacion.codigo} — {clasificacion.galpon}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-md p-1 text-slate-400 hover:bg-slate-100">✕</button>
         </div>
@@ -600,7 +585,7 @@ function ReadonlyField({
   );
 }
 
-/* ─── MODAL: catálogo de tipos de huevo (real, vía API) ─────────────────── */
+/* ─── MODAL: catálogo de tipos de huevo ─────────────────────────────────── */
 
 function ModalTipos({
   tipos, productos, onClose, onChange,
@@ -619,8 +604,7 @@ function ModalTipos({
   async function agregar() {
     const n = nuevoNombre.trim();
     if (!n) return;
-    setPendiente(true);
-    setError(null);
+    setPendiente(true); setError(null);
     try {
       const r = await fetch("/api/granja/tipos-huevo", {
         method: "POST",
@@ -628,20 +612,18 @@ function ModalTipos({
         body: JSON.stringify({ nombre: n }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j?.error?.message ?? "Error al agregar");
+      if (!r.ok) throw new Error(j?.error?.message ?? j?.error ?? "Error");
       setNuevoNombre("");
       await onChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
-    } finally { setPendiente(false); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+    finally { setPendiente(false); }
   }
 
   async function guardarEdit() {
     if (!editandoId) return;
     const n = editandoNombre.trim();
     if (!n) return;
-    setPendiente(true);
-    setError(null);
+    setPendiente(true); setError(null);
     try {
       const r = await fetch(`/api/granja/tipos-huevo/${editandoId}`, {
         method: "PATCH",
@@ -649,31 +631,28 @@ function ModalTipos({
         body: JSON.stringify({ nombre: n }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j?.error?.message ?? "Error al editar");
+      if (!r.ok) throw new Error(j?.error?.message ?? j?.error ?? "Error");
       setEditandoId(null); setEditandoNombre("");
       await onChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
-    } finally { setPendiente(false); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+    finally { setPendiente(false); }
   }
 
   async function borrar(id: string) {
     if (!confirm("¿Borrar este tipo de huevo?")) return;
-    setPendiente(true);
-    setError(null);
+    setPendiente(true); setError(null);
     try {
       const r = await fetch(`/api/granja/tipos-huevo/${id}`, { method: "DELETE" });
       const j = await r.json();
-      if (!r.ok) throw new Error(j?.error?.message ?? "Error al borrar");
+      if (!r.ok) throw new Error(j?.error?.message ?? j?.error ?? "Error");
       await onChange();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error");
-    } finally { setPendiente(false); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+    finally { setPendiente(false); }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 px-4 py-8 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Tipos de huevos</h3>
@@ -691,14 +670,7 @@ function ModalTipos({
             placeholder="Nombre del tipo (ej: Doble yema)"
             className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
           />
-          <button
-            type="button"
-            onClick={agregar}
-            disabled={pendiente}
-            className="rounded-md bg-[#22c55e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#16a34a] disabled:opacity-60"
-          >
-            + Agregar
-          </button>
+          <button type="button" onClick={agregar} disabled={pendiente} className="rounded-md bg-[#22c55e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#16a34a] disabled:opacity-60">+ Agregar</button>
         </div>
 
         {error && <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
@@ -748,11 +720,10 @@ function ModalTipos({
                             body: JSON.stringify({ producto_id: e.target.value || null }),
                           });
                           const j = await r.json();
-                          if (!r.ok) throw new Error(j?.error?.message ?? "Error");
+                          if (!r.ok) throw new Error(j?.error?.message ?? j?.error ?? "Error");
                           await onChange();
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : "Error");
-                        } finally { setPendiente(false); }
+                        } catch (err) { setError(err instanceof Error ? err.message : "Error"); }
+                        finally { setPendiente(false); }
                       }}
                       className="w-full max-w-[220px] rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                     >
@@ -791,56 +762,35 @@ function ModalTipos({
   );
 }
 
-/* ─── MODAL: nueva clasificación (cabecera) ─────────────────────────────── */
-
-function ahoraIsoLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+/* ─── MODAL: nueva clasificación (elegir producción a clasificar) ────────── */
 
 function ModalNueva({
-  galpones, onClose, onCrear,
+  producciones, onClose, onCrear,
 }: {
-  galpones: GalponOpt[];
+  producciones: ProduccionOpt[];
   onClose: () => void;
-  onCrear: (base: {
-    galpon_id: string; fecha: string; cantidad_huevos: number; bajas: number;
-    responsable: string; fecha_distribucion: string | null; resp_distribucion: string;
-  }) => Promise<{ ok: boolean; error?: string; clasificacion?: Clasificacion }>;
+  onCrear: (produccion_id: string, resp_distribucion: string, fecha_distribucion: string | null) => Promise<{ ok: boolean; error?: string; clasificacion?: Clasificacion }>;
 }) {
-  const [galponId, setGalponId] = useState(galpones[0]?.id ?? "");
-  const [fecha, setFecha] = useState(ahoraIsoLocal());
-  const [cantidad, setCantidad] = useState("");
-  const [bajas, setBajas] = useState("0");
-  const [responsable, setResponsable] = useState("");
-  const [fechaDist, setFechaDist] = useState("");
+  const [produccionId, setProduccionId] = useState(producciones[0]?.id ?? "");
   const [respDist, setRespDist] = useState("");
+  const [fechaDist, setFechaDist] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendiente, setPendiente] = useState(false);
 
   useEffect(() => {
-    if (!galponId && galpones[0]) setGalponId(galpones[0].id);
-  }, [galpones, galponId]);
+    if (!produccionId && producciones[0]) setProduccionId(producciones[0].id);
+  }, [producciones, produccionId]);
+
+  const seleccionada = producciones.find((p) => p.id === produccionId);
 
   async function crear() {
-    if (!galponId) { setError("Seleccioná un galpón."); return; }
-    const c = Number(cantidad);
-    if (!Number.isFinite(c) || c <= 0) { setError("La cantidad de huevos debe ser mayor a 0."); return; }
-    const b = Number(bajas);
-    if (!Number.isFinite(b) || b < 0) { setError("Las bajas deben ser un número positivo o cero."); return; }
-    if (!responsable.trim()) { setError("El responsable es obligatorio."); return; }
-    setPendiente(true);
-    setError(null);
-    const r = await onCrear({
-      galpon_id: galponId,
-      fecha: fecha ? new Date(fecha).toISOString() : new Date().toISOString(),
-      cantidad_huevos: c,
-      bajas: b,
-      responsable: responsable.trim(),
-      fecha_distribucion: fechaDist ? new Date(fechaDist).toISOString() : null,
-      resp_distribucion: respDist.trim(),
-    });
+    if (!produccionId) { setError("Seleccioná una producción."); return; }
+    setPendiente(true); setError(null);
+    const r = await onCrear(
+      produccionId,
+      respDist.trim(),
+      fechaDist ? new Date(fechaDist).toISOString() : null
+    );
     setPendiente(false);
     if (!r.ok) setError(r.error ?? "Error al crear");
   }
@@ -851,73 +801,44 @@ function ModalNueva({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Nueva clasificación</h3>
-            <p className="mt-0.5 text-xs text-slate-500">Paso 1 — cargá los datos base. Después vas a clasificar por tipo.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Elegí una producción sin clasificar para procesar.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-md p-1 text-slate-400 hover:bg-slate-100">✕</button>
         </div>
 
         <div className="mt-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-slate-600">Galpón *</label>
-              {galpones.length === 0 ? (
-                <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Sin galpones cargados. Creá uno en /galpones primero.</p>
-              ) : (
-                <select
-                  value={galponId}
-                  onChange={(e) => setGalponId(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                >
-                  {galpones.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-                </select>
-              )}
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Fecha y hora *</label>
-              <input
-                type="datetime-local"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-slate-600">Cantidad huevos *</label>
-              <input
-                type="number"
-                min={0}
-                value={cantidad}
-                onChange={(e) => setCantidad(e.target.value)}
-                placeholder="Ej: 9780"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Bajas</label>
-              <input
-                type="number"
-                min={0}
-                value={bajas}
-                onChange={(e) => setBajas(e.target.value)}
-                placeholder="0"
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              />
-            </div>
-          </div>
-
           <div>
-            <label className="text-xs font-medium text-slate-600">Responsable *</label>
-            <input
-              type="text"
-              value={responsable}
-              onChange={(e) => setResponsable(e.target.value)}
-              placeholder="Ej: luzovelar"
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-            />
+            <label className="text-xs font-medium text-slate-600">Producción a clasificar *</label>
+            {producciones.length === 0 ? (
+              <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                No hay producciones sin clasificar. Creá una en /produccion primero.
+              </p>
+            ) : (
+              <select
+                value={produccionId}
+                onChange={(e) => setProduccionId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              >
+                {producciones.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    #{p.codigo} — {p.galpon} — {fmtFechaHora(p.fecha)} — {fmtNumero(p.cantidad_huevos)} huevos
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
+
+          {seleccionada && (
+            <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Datos heredados</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div><span className="text-slate-500">Galpón:</span> <span className="font-medium text-slate-800">{seleccionada.galpon}</span></div>
+                <div><span className="text-slate-500">Responsable:</span> <span className="font-medium text-slate-800">{seleccionada.responsable}</span></div>
+                <div><span className="text-slate-500">Huevos:</span> <span className="font-medium text-slate-800 tabular-nums">{fmtNumero(seleccionada.cantidad_huevos)}</span></div>
+                <div><span className="text-slate-500">Bajas:</span> <span className="font-medium text-slate-800 tabular-nums">{seleccionada.bajas}</span></div>
+              </div>
+            </div>
+          )}
 
           <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Distribución (opcional)</p>
@@ -950,18 +871,11 @@ function ModalNueva({
         </div>
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={pendiente}
-            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            Cancelar
-          </button>
+          <button type="button" onClick={onClose} disabled={pendiente} className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">Cancelar</button>
           <button
             type="button"
             onClick={crear}
-            disabled={pendiente || galpones.length === 0}
+            disabled={pendiente || producciones.length === 0}
             className="rounded-md bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md active:scale-[.98] disabled:opacity-60"
           >
             {pendiente ? "Creando…" : "Continuar a clasificar →"}

@@ -3,9 +3,8 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 
-const COLS = "id, empresa_id, codigo, nombre, producto_id, created_at, updated_at";
+const COLS = "id, empresa_id, codigo, nombre, producto_id, activo, created_at";
 
-/** GET /api/granja/tipos-huevo — catálogo de tipos de huevo. */
 export async function GET(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
@@ -19,12 +18,10 @@ export async function GET(request: NextRequest) {
     if (error) return NextResponse.json(errorResponse(error.message), { status: 400 });
     return NextResponse.json(successResponse({ tipos: data ?? [] }));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error";
-    return NextResponse.json(errorResponse(msg), { status: 500 });
+    return NextResponse.json(errorResponse(err instanceof Error ? err.message : "Error"), { status: 500 });
   }
 }
 
-/** POST /api/granja/tipos-huevo — alta de tipo. */
 export async function POST(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
@@ -46,13 +43,12 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("granja_tipos_huevo")
-      .insert({ empresa_id: auth.empresa_id, codigo: nextCodigo, nombre, producto_id })
+      .insert({ empresa_id: auth.empresa_id, codigo: nextCodigo, nombre, producto_id, activo: true })
       .select(COLS)
       .single();
     if (error) return NextResponse.json(errorResponse(error.message), { status: 400 });
     return NextResponse.json(successResponse({ tipo: data }));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error";
-    return NextResponse.json(errorResponse(msg), { status: 500 });
+    return NextResponse.json(errorResponse(err instanceof Error ? err.message : "Error"), { status: 500 });
   }
 }

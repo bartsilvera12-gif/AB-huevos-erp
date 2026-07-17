@@ -4,18 +4,13 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 
 const COLS =
-  "id, empresa_id, codigo, galpon_id, fecha, cantidad_huevos, bajas, responsable, fecha_distribucion, resp_distribucion, stock_aplicado, created_at, updated_at";
+  "id, empresa_id, produccion_id, fecha_distribucion, resp_distribucion, stock_aplicado, created_at, updated_at";
 
-type ClasRow = {
-  id: string; codigo: number; galpon_id: string;
-  fecha: string; cantidad_huevos: number; bajas: number;
-  responsable: string;
-  fecha_distribucion: string | null; resp_distribucion: string | null;
-  stock_aplicado: boolean | null;
-  granja_galpones?: { id: string; nombre: string } | { id: string; nombre: string }[];
-};
-
-/** GET /api/granja/clasificaciones — lista con detalle y nombre de galpón. */
+/**
+ * GET — lista clasificaciones con datos de la producción y galpón asociados.
+ * PostgREST no tiene FK entre granja_clasificaciones y granja_galpones, así que
+ * hacemos el fetch en dos pasos: 1) clasificaciones + producciones, 2) galpones por id.
+ */
 export async function GET(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
@@ -24,121 +19,139 @@ export async function GET(request: NextRequest) {
 
     const { data: heads, error } = await supabase
       .from("granja_clasificaciones")
-      .select(`${COLS}, granja_galpones!inner(id, nombre)`)
+      .select(`${COLS}, granja_producciones!inner(id, codigo, galpon_id, fecha, cantidad_huevos, bajas, responsable)`)
       .eq("empresa_id", auth.empresa_id)
-      .order("fecha", { ascending: false });
+      .order("created_at", { ascending: false });
     if (error) return NextResponse.json(errorResponse(error.message), { status: 400 });
 
-    const ids = (heads ?? []).map((r) => (r as ClasRow).id);
-    let detalleMap: Record<string, Array<{ tipo_id: string; cantidad: number; planchas: number; unidades: number }>> = {};
-    if (ids.length > 0) {
-      const { data: det, error: eDet } = await supabase
-        .from("granja_clasificacion_detalle")
-        .select("clasificacion_id, tipo_id, cantidad, planchas, unidades")
-        .in("clasificacion_id", ids);
-      if (eDet) return NextResponse.json(errorResponse(eDet.message), { status: 400 });
-      detalleMap = (det ?? []).reduce((acc: Record<string, Array<{ tipo_id: string; cantidad: number; planchas: number; unidades: number }>>, d) => {
-        const dd = d as { clasificacion_id: string; tipo_id: string; cantidad: number; planchas: number; unidades: number };
-        (acc[dd.clasificacion_id] ??= []).push({ tipo_id: dd.tipo_id, cantidad: dd.cantidad, planchas: dd.planchas, unidades: dd.unidades });
-        return acc;
-      }, {});
+    type ProdEmb = { id: string; codigo: number; galpon_id: string; fecha: string; cantidad_huevos: number; bajas: number; responsable: string };
+    type Row = {
+      id: string; produccion_id: string;
+      fecha_distribucion: string | null; resp_distribucion: string | null;
+      stock_aplicado: boolean | null;
+      granja_producciones?: ProdEmb | ProdEmb[];
+    };
+    const rows = (heads ?? []) as Row[];
+
+    // Traer nombres de galpones aparte
+    const galponIds = Array.from(new Set(rows.map((r) => {
+      const p = Array.isArray(r.granja_producciones) ? r.granja_producciones[0] : r.granja_producciones;
+      return p?.galpon_id;
+    }).filter(Boolean) as string[]));
+    let galponNombre: Record<string, string> = {};
+    if (galponIds.length > 0) {
+      const gq = await supabase
+        .from("granja_galpones")
+        .select("id, nombre")
+        .eq("empresa_id", auth.empresa_id)
+        .in("id", galponIds);
+      if (gq.error) throw new Error(gq.error.message);
+      galponNombre = ((gq.data ?? []) as Array<{ id: string; nombre: string }>).reduce((acc, g) => {
+        acc[g.id] = g.nombre; return acc;
+      }, {} as Record<string, string>);
     }
 
-    const clasificaciones = (heads ?? []).map((r) => {
-      const rr = r as ClasRow;
-      const g = Array.isArray(rr.granja_galpones) ? rr.granja_galpones[0] : rr.granja_galpones;
+    // Detalle por clasificación
+    const clasIds = rows.map((r) => r.id);
+    let detalleMap: Record<string, Array<{ tipo_huevo_id: string; cantidad: number; planchas_generadas: number; unidades_sobrantes: number }>> = {};
+    if (clasIds.length > 0) {
+      const dQ = await supabase
+        .from("granja_clasificacion_detalle")
+        .select("clasificacion_id, tipo_huevo_id, cantidad, planchas_generadas, unidades_sobrantes")
+        .in("clasificacion_id", clasIds);
+      if (dQ.error) throw new Error(dQ.error.message);
+      detalleMap = ((dQ.data ?? []) as Array<{ clasificacion_id: string; tipo_huevo_id: string; cantidad: number; planchas_generadas: number; unidades_sobrantes: number }>).reduce((acc, d) => {
+        (acc[d.clasificacion_id] ??= []).push({
+          tipo_huevo_id: d.tipo_huevo_id,
+          cantidad: d.cantidad,
+          planchas_generadas: d.planchas_generadas,
+          unidades_sobrantes: d.unidades_sobrantes,
+        });
+        return acc;
+      }, {} as Record<string, Array<{ tipo_huevo_id: string; cantidad: number; planchas_generadas: number; unidades_sobrantes: number }>>);
+    }
+
+    const clasificaciones = rows.map((r) => {
+      const p = (Array.isArray(r.granja_producciones) ? r.granja_producciones[0] : r.granja_producciones) as ProdEmb | undefined;
       return {
-        id: rr.id,
-        codigo: rr.codigo,
-        galpon_id: rr.galpon_id,
-        galpon: g?.nombre ?? "",
-        fecha: rr.fecha,
-        cantidad_huevos: rr.cantidad_huevos,
-        bajas: rr.bajas,
-        responsable: rr.responsable,
-        fecha_distribucion: rr.fecha_distribucion,
-        resp_distribucion: rr.resp_distribucion ?? "",
-        stock_aplicado: !!rr.stock_aplicado,
-        detalle: detalleMap[rr.id] ?? [],
+        id: r.id,
+        produccion_id: r.produccion_id,
+        codigo: p?.codigo ?? 0,
+        galpon_id: p?.galpon_id ?? "",
+        galpon: p?.galpon_id ? (galponNombre[p.galpon_id] ?? "") : "",
+        fecha: p?.fecha ?? "",
+        cantidad_huevos: p?.cantidad_huevos ?? 0,
+        bajas: p?.bajas ?? 0,
+        responsable: p?.responsable ?? "",
+        fecha_distribucion: r.fecha_distribucion,
+        resp_distribucion: r.resp_distribucion ?? "",
+        stock_aplicado: !!r.stock_aplicado,
+        detalle: detalleMap[r.id] ?? [],
       };
     });
     return NextResponse.json(successResponse({ clasificaciones }));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error";
-    return NextResponse.json(errorResponse(msg), { status: 500 });
+    return NextResponse.json(errorResponse(err instanceof Error ? err.message : "Error"), { status: 500 });
   }
 }
 
-/** POST /api/granja/clasificaciones — alta de cabecera de clasificación. */
+/**
+ * POST — crear cabecera de clasificación linkeada a una producción existente.
+ * Solo se puede clasificar una producción NO clasificada aún.
+ */
 export async function POST(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const { supabase, auth } = ctx;
     const body = (await request.json().catch(() => ({}))) as {
-      galpon_id?: string;
-      fecha?: string;
-      cantidad_huevos?: number;
-      bajas?: number;
-      responsable?: string;
+      produccion_id?: string;
       fecha_distribucion?: string | null;
       resp_distribucion?: string;
     };
-    const galponId = String(body.galpon_id ?? "").trim();
-    if (!galponId) return NextResponse.json(errorResponse("Galpón obligatorio."), { status: 400 });
-    const cant = Number(body.cantidad_huevos ?? 0);
-    if (!Number.isFinite(cant) || cant < 0) return NextResponse.json(errorResponse("Cantidad inválida."), { status: 400 });
-    const bajas = Number(body.bajas ?? 0);
-    if (!Number.isFinite(bajas) || bajas < 0) return NextResponse.json(errorResponse("Bajas inválidas."), { status: 400 });
-    const responsable = String(body.responsable ?? "").trim();
-    if (!responsable) return NextResponse.json(errorResponse("Responsable obligatorio."), { status: 400 });
+    const produccionId = String(body.produccion_id ?? "").trim();
+    if (!produccionId) return NextResponse.json(errorResponse("Producción obligatoria."), { status: 400 });
 
-    const galpQ = await supabase
-      .from("granja_galpones")
-      .select("id, nombre")
+    const prodQ = await supabase
+      .from("granja_producciones")
+      .select("id, codigo, galpon_id, fecha, cantidad_huevos, bajas, responsable, clasificada")
       .eq("empresa_id", auth.empresa_id)
-      .eq("id", galponId)
+      .eq("id", produccionId)
       .maybeSingle();
-    if (galpQ.error) throw new Error(galpQ.error.message);
-    if (!galpQ.data) return NextResponse.json(errorResponse("El galpón no existe."), { status: 400 });
-
-    const maxQ = await supabase
-      .from("granja_clasificaciones")
-      .select("codigo")
-      .eq("empresa_id", auth.empresa_id)
-      .order("codigo", { ascending: false })
-      .limit(1);
-    if (maxQ.error) throw new Error(maxQ.error.message);
-    const nextCodigo = (maxQ.data?.[0]?.codigo ?? 0) + 1;
+    if (prodQ.error) throw new Error(prodQ.error.message);
+    if (!prodQ.data) return NextResponse.json(errorResponse("La producción no existe."), { status: 400 });
+    const prod = prodQ.data as { id: string; codigo: number; galpon_id: string; fecha: string; cantidad_huevos: number; bajas: number; responsable: string; clasificada: boolean };
+    if (prod.clasificada) {
+      return NextResponse.json(errorResponse("Esta producción ya fue clasificada."), { status: 409 });
+    }
 
     const { data, error } = await supabase
       .from("granja_clasificaciones")
       .insert({
         empresa_id: auth.empresa_id,
-        codigo: nextCodigo,
-        galpon_id: galponId,
-        fecha: body.fecha || new Date().toISOString(),
-        cantidad_huevos: cant,
-        bajas,
-        responsable,
+        produccion_id: produccionId,
         fecha_distribucion: body.fecha_distribucion || null,
-        resp_distribucion: String(body.resp_distribucion ?? "").trim(),
+        resp_distribucion: String(body.resp_distribucion ?? "").trim() || null,
       })
       .select(COLS)
       .single();
     if (error) return NextResponse.json(errorResponse(error.message), { status: 400 });
 
-    const row = data as ClasRow;
+    const galpQ = await supabase
+      .from("granja_galpones").select("nombre").eq("id", prod.galpon_id).maybeSingle();
+
+    const row = data as { id: string; produccion_id: string; fecha_distribucion: string | null; resp_distribucion: string | null; stock_aplicado: boolean | null };
     return NextResponse.json(successResponse({
       clasificacion: {
         id: row.id,
-        codigo: row.codigo,
-        galpon_id: row.galpon_id,
-        galpon: (galpQ.data as { nombre: string }).nombre,
-        fecha: row.fecha,
-        cantidad_huevos: row.cantidad_huevos,
-        bajas: row.bajas,
-        responsable: row.responsable,
+        produccion_id: row.produccion_id,
+        codigo: prod.codigo,
+        galpon_id: prod.galpon_id,
+        galpon: (galpQ.data as { nombre?: string } | null)?.nombre ?? "",
+        fecha: prod.fecha,
+        cantidad_huevos: prod.cantidad_huevos,
+        bajas: prod.bajas,
+        responsable: prod.responsable,
         fecha_distribucion: row.fecha_distribucion,
         resp_distribucion: row.resp_distribucion ?? "",
         stock_aplicado: false,
@@ -146,7 +159,6 @@ export async function POST(request: NextRequest) {
       },
     }));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error";
-    return NextResponse.json(errorResponse(msg), { status: 500 });
+    return NextResponse.json(errorResponse(err instanceof Error ? err.message : "Error"), { status: 500 });
   }
 }
