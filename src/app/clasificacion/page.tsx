@@ -1,14 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Egg, ListChecks, Package, Layers, Sparkles, PiggyBank, Tags } from "lucide-react";
-
-/**
- * DEMO estática del módulo Clasificación de huevos — sin conexión a la DB.
- * Solo para revisar diseño e interacción antes de conectar backend.
- */
+import { useEffect, useMemo, useState } from "react";
+import { Egg, ListChecks, Layers, Sparkles, PiggyBank, Tags } from "lucide-react";
 
 type TipoHuevo = { id: string; codigo: number; nombre: string };
+type GalponOpt = { id: string; nombre: string };
 
 type LineaClasificacion = {
   tipo_id: string;
@@ -17,7 +13,6 @@ type LineaClasificacion = {
   unidades: number;
 };
 
-/** Convención: 1 plancha = 30 huevos. Unidades = sobrantes que no llenan una plancha completa. */
 const HUEVOS_POR_PLANCHA = 30;
 function calcularPlanchasUnidades(cantidad: number): { planchas: number; unidades: number } {
   const n = Math.max(0, Math.trunc(cantidad));
@@ -27,8 +22,9 @@ function calcularPlanchasUnidades(cantidad: number): { planchas: number; unidade
 type Clasificacion = {
   id: string;
   codigo: number;
+  galpon_id: string;
   galpon: string;
-  fecha: string;                 // ISO datetime
+  fecha: string;
   cantidad_huevos: number;
   bajas: number;
   responsable: string;
@@ -36,19 +32,6 @@ type Clasificacion = {
   resp_distribucion: string;
   detalle: LineaClasificacion[];
 };
-
-const TIPOS_DEMO: TipoHuevo[] = [
-  { id: "t1", codigo: 1, nombre: "Jumbo" },
-  { id: "t2", codigo: 2, nombre: "Super" },
-  { id: "t3", codigo: 3, nombre: "Tipo A" },
-  { id: "t4", codigo: 4, nombre: "Tipo B" },
-  { id: "t5", codigo: 5, nombre: "Tipo C" },
-  { id: "t6", codigo: 6, nombre: "Picado" },
-  { id: "t7", codigo: 7, nombre: "Roto" },
-  { id: "t8", codigo: 8, nombre: "Sucio" },
-];
-
-const CLASIFICACIONES_DEMO: Clasificacion[] = [];
 
 function fmtNumero(n: number): string {
   return n.toLocaleString("es-PY");
@@ -63,54 +46,106 @@ function fmtFechaHora(iso: string | null): string {
     const yyyy = d.getFullYear();
     const hh = String(d.getHours()).padStart(2, "0");
     const min = String(d.getMinutes()).padStart(2, "0");
-    const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
   } catch { return iso; }
 }
 
+function isoToLocal(iso: string | null): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch { return ""; }
+}
+
 export default function ClasificacionPage() {
-  const [clasificaciones, setClasificaciones] = useState<Clasificacion[]>(CLASIFICACIONES_DEMO);
-  const [tipos, setTipos] = useState<TipoHuevo[]>(TIPOS_DEMO);
+  const [clasificaciones, setClasificaciones] = useState<Clasificacion[]>([]);
+  const [tipos, setTipos] = useState<TipoHuevo[]>([]);
+  const [galpones, setGalpones] = useState<GalponOpt[]>([]);
+  const [acumulador, setAcumulador] = useState<Record<string, number>>({});
+  const [cargando, setCargando] = useState(true);
+  const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
+
   const [busqueda, setBusqueda] = useState("");
   const [editando, setEditando] = useState<Clasificacion | null>(null);
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [tiposModalOpen, setTiposModalOpen] = useState(false);
-
-  // Acumulador de huevos sueltos por tipo. Cuando llega a 30, se convierte
-  // automáticamente en una plancha completa y va al stock de inventario.
-  const [acumulador, setAcumulador] = useState<Record<string, number>>({});
   const [toastMensaje, setToastMensaje] = useState<string | null>(null);
 
-  /**
-   * Recibe cantidades por tipo (desde el modal de clasificación) y actualiza
-   * el acumulador. Si algún tipo llega o supera 30, arma planchas y muestra
-   * un toast con el resumen.
-   */
-  function procesarSueltos(cantidadesPorTipo: Record<string, number>) {
-    const planchasGeneradas: { tipo_nombre: string; planchas: number }[] = [];
-    setAcumulador((prev) => {
-      const next = { ...prev };
-      for (const [tipoId, cant] of Object.entries(cantidadesPorTipo)) {
-        const sobrantes = cant % HUEVOS_POR_PLANCHA;
-        if (sobrantes === 0) continue;
-        const acumNuevo = (next[tipoId] ?? 0) + sobrantes;
-        if (acumNuevo >= HUEVOS_POR_PLANCHA) {
-          const planchasExtra = Math.floor(acumNuevo / HUEVOS_POR_PLANCHA);
-          next[tipoId] = acumNuevo % HUEVOS_POR_PLANCHA;
-          const tipoNombre = tipos.find((t) => t.id === tipoId)?.nombre ?? tipoId;
-          planchasGeneradas.push({ tipo_nombre: tipoNombre, planchas: planchasExtra });
-        } else {
-          next[tipoId] = acumNuevo;
-        }
+  async function cargarTodo() {
+    setCargando(true);
+    setErrorGeneral(null);
+    try {
+      const [rC, rT, rG, rS] = await Promise.all([
+        fetch("/api/granja/clasificaciones", { cache: "no-store" }),
+        fetch("/api/granja/tipos-huevo", { cache: "no-store" }),
+        fetch("/api/granja/galpones", { cache: "no-store" }),
+        fetch("/api/granja/sueltos", { cache: "no-store" }),
+      ]);
+      const [jC, jT, jG, jS] = await Promise.all([rC.json(), rT.json(), rG.json(), rS.json()]);
+      if (!rC.ok) throw new Error(jC?.error?.message ?? "Error cargando clasificaciones");
+      if (!rT.ok) throw new Error(jT?.error?.message ?? "Error cargando tipos");
+      if (!rG.ok) throw new Error(jG?.error?.message ?? "Error cargando galpones");
+      if (!rS.ok) throw new Error(jS?.error?.message ?? "Error cargando sueltos");
+      setClasificaciones(jC.data?.clasificaciones ?? []);
+      setTipos(jT.data?.tipos ?? []);
+      setGalpones((jG.data?.galpones ?? []).map((g: { id: string; nombre: string }) => ({ id: g.id, nombre: g.nombre })));
+      setAcumulador(jS.data?.acumulador ?? {});
+    } catch (e) {
+      setErrorGeneral(e instanceof Error ? e.message : "Error");
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  useEffect(() => { cargarTodo(); }, []);
+
+  async function crearCabecera(base: {
+    galpon_id: string; fecha: string; cantidad_huevos: number; bajas: number;
+    responsable: string; fecha_distribucion: string | null; resp_distribucion: string;
+  }): Promise<{ ok: boolean; error?: string; clasificacion?: Clasificacion }> {
+    try {
+      const r = await fetch("/api/granja/clasificaciones", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(base),
+      });
+      const j = await r.json();
+      if (!r.ok) return { ok: false, error: j?.error?.message ?? "Error al crear" };
+      const c = j.data?.clasificacion as Clasificacion;
+      setClasificaciones((prev) => [c, ...prev]);
+      return { ok: true, clasificacion: c };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    }
+  }
+
+  async function guardarDetalle(clasId: string, detalle: LineaClasificacion[]): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const r = await fetch(`/api/granja/clasificaciones/${clasId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          detalle: detalle.map((d) => ({ tipo_id: d.tipo_id, cantidad: d.cantidad })),
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) return { ok: false, error: j?.error?.message ?? "Error al guardar" };
+      const planchas = (j.data?.planchas_generadas ?? []) as Array<{ tipo_id: string; planchas: number }>;
+      if (planchas.length > 0) {
+        const detTxt = planchas.map((p) => {
+          const nombre = tipos.find((t) => t.id === p.tipo_id)?.nombre ?? p.tipo_id;
+          return `${p.planchas} de ${nombre}`;
+        }).join(" · ");
+        setToastMensaje(detTxt);
+        setTimeout(() => setToastMensaje(null), 6000);
       }
-      return next;
-    });
-    if (planchasGeneradas.length > 0) {
-      const detalle = planchasGeneradas
-        .map((p) => `${p.planchas} de ${p.tipo_nombre}`)
-        .join(" · ");
-      setToastMensaje(`✨ Se armaron planchas nuevas desde sueltos: ${detalle}`);
-      setTimeout(() => setToastMensaje(null), 6000);
+      // Refrescar clasificaciones y sueltos
+      await cargarTodo();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Error" };
     }
   }
 
@@ -165,17 +200,18 @@ export default function ClasificacionPage() {
         </div>
       </div>
 
-      {/* KPIs */}
+      {errorGeneral && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorGeneral}</div>
+      )}
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard label="Registros de producción" value={String(clasificaciones.length)} icon={<Layers className="h-5 w-5" />} tone="slate" />
         <KpiCard label="Total de huevos" value={fmtNumero(totalHuevos)} icon={<Egg className="h-5 w-5" />} tone="sky" />
         <KpiCard label="Tipos de huevo definidos" value={String(tipos.length)} icon={<Tags className="h-5 w-5" />} tone="emerald" />
       </div>
 
-      {/* Huevos sueltos acumulados */}
       <SueltosPanel tipos={tipos} acumulador={acumulador} />
 
-      {/* Tabla */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4">
           <input
@@ -203,10 +239,10 @@ export default function ClasificacionPage() {
               </tr>
             </thead>
             <tbody>
-              {filtradas.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-5 py-10 text-center text-sm text-slate-400">Sin registros que coincidan.</td>
-                </tr>
+              {cargando ? (
+                <tr><td colSpan={9} className="px-5 py-10 text-center text-sm text-slate-400">Cargando clasificaciones…</td></tr>
+              ) : filtradas.length === 0 ? (
+                <tr><td colSpan={9} className="px-5 py-10 text-center text-sm text-slate-400">Sin registros que coincidan.</td></tr>
               ) : (
                 filtradas.map((c) => (
                   <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors">
@@ -217,17 +253,15 @@ export default function ClasificacionPage() {
                     <td className="px-5 py-4 text-right tabular-nums text-slate-700">{c.bajas}</td>
                     <td className="px-5 py-4 text-slate-700">{c.responsable}</td>
                     <td className="px-5 py-4 text-slate-700 tabular-nums text-xs">{fmtFechaHora(c.fecha_distribucion)}</td>
-                    <td className="px-5 py-4 text-slate-700">{c.resp_distribucion}</td>
+                    <td className="px-5 py-4 text-slate-700">{c.resp_distribucion || "—"}</td>
                     <td className="px-5 py-4 text-right">
-                      <div className="inline-flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setEditando(c)}
-                          className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
-                        >
-                          Editar
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditando(c)}
+                        className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                      >
+                        Editar
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -237,54 +271,42 @@ export default function ClasificacionPage() {
         </div>
       </div>
 
-      <p className="text-[11px] text-slate-400 italic">Demo visual — los cambios no se guardan (todavía no está conectado a la base de datos).</p>
-
-      {/* Modal editar clasificación */}
       {editando && (
         <ModalClasificacion
           clasificacion={editando}
           tipos={tipos}
           onClose={() => setEditando(null)}
-          onGuardar={(c) => {
-            const cantidadesPorTipo: Record<string, number> = {};
-            for (const linea of c.detalle) cantidadesPorTipo[linea.tipo_id] = linea.cantidad;
-            procesarSueltos(cantidadesPorTipo);
-            setClasificaciones((prev) => prev.map((x) => (x.id === c.id ? c : x)));
-            setEditando(null);
+          onGuardar={async (detalle) => {
+            const r = await guardarDetalle(editando.id, detalle);
+            if (r.ok) setEditando(null);
+            return r;
           }}
         />
       )}
 
-      {/* Modal nueva clasificación */}
       {nuevaOpen && (
         <ModalNueva
+          galpones={galpones}
           onClose={() => setNuevaOpen(false)}
-          onCrear={(base) => {
-            const nextCodigo = clasificaciones.length > 0 ? Math.max(...clasificaciones.map((c) => c.codigo)) + 1 : 1;
-            const nueva: Clasificacion = {
-              ...base,
-              id: crypto.randomUUID(),
-              codigo: nextCodigo,
-              detalle: [],
-            };
-            setClasificaciones((prev) => [nueva, ...prev]);
-            setNuevaOpen(false);
-            // Abrimos directamente el modal de clasificación para completar el desglose.
-            setEditando(nueva);
+          onCrear={async (base) => {
+            const r = await crearCabecera(base);
+            if (r.ok && r.clasificacion) {
+              setNuevaOpen(false);
+              setEditando(r.clasificacion);
+            }
+            return r;
           }}
         />
       )}
 
-      {/* Modal catálogo tipos */}
       {tiposModalOpen && (
         <ModalTipos
           tipos={tipos}
-          setTipos={setTipos}
           onClose={() => setTiposModalOpen(false)}
+          onChange={cargarTodo}
         />
       )}
 
-      {/* Toast planchas armadas desde sueltos */}
       {toastMensaje && (
         <div className="fixed bottom-6 right-6 z-[60] max-w-sm animate-in fade-in slide-in-from-bottom-4">
           <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-2xl ring-1 ring-emerald-200/50">
@@ -294,7 +316,7 @@ export default function ClasificacionPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-emerald-900">Planchas armadas automáticamente</p>
-                <p className="mt-0.5 text-xs text-emerald-800">{toastMensaje.replace("✨ Se armaron planchas nuevas desde sueltos: ", "")}</p>
+                <p className="mt-0.5 text-xs text-emerald-800">{toastMensaje}</p>
               </div>
               <button
                 type="button"
@@ -312,12 +334,9 @@ export default function ClasificacionPage() {
   );
 }
 
-/* ─── Panel: huevos sueltos acumulados ────────────────────────────────────── */
-
 function SueltosPanel({ tipos, acumulador }: { tipos: TipoHuevo[]; acumulador: Record<string, number> }) {
   const totalSueltos = Object.values(acumulador).reduce((s, n) => s + (n || 0), 0);
   const paletas: Record<string, { grad: string; text: string; bar: string; bg: string; border: string }> = {
-    // Se asigna una paleta por índice, ciclamos si hay más tipos.
     "0": { grad: "from-amber-100 to-amber-50",     text: "text-amber-800",    bar: "bg-amber-500",     bg: "bg-amber-100",    border: "border-amber-200" },
     "1": { grad: "from-sky-100 to-sky-50",         text: "text-sky-800",      bar: "bg-sky-500",       bg: "bg-sky-100",      border: "border-sky-200" },
     "2": { grad: "from-emerald-100 to-emerald-50", text: "text-emerald-800",  bar: "bg-emerald-500",   bg: "bg-emerald-100",  border: "border-emerald-200" },
@@ -347,47 +366,41 @@ function SueltosPanel({ tipos, acumulador }: { tipos: TipoHuevo[]; acumulador: R
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-        {tipos.map((t, idx) => {
-          const cant = acumulador[t.id] ?? 0;
-          const porcentaje = Math.min(100, (cant / HUEVOS_POR_PLANCHA) * 100);
-          const restan = Math.max(0, HUEVOS_POR_PLANCHA - cant);
-          const casiLleno = cant >= HUEVOS_POR_PLANCHA - 3 && cant > 0;
-          const p = paletas[String(idx % 8)];
-          return (
-            <div
-              key={t.id}
-              className={`rounded-xl border bg-gradient-to-br ${p.grad} ${p.border} p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className={`text-xs font-bold uppercase tracking-wide ${p.text}`}>{t.nombre}</p>
-                {casiLleno && (
-                  <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 ring-1 ring-amber-300/50 animate-pulse">
-                    ¡Casi!
-                  </span>
-                )}
+      {tipos.length === 0 ? (
+        <p className="text-xs text-slate-400 italic">Todavía no hay tipos de huevo definidos. Cargalos desde el botón "Tipos de huevos".</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {tipos.map((t, idx) => {
+            const cant = acumulador[t.id] ?? 0;
+            const porcentaje = Math.min(100, (cant / HUEVOS_POR_PLANCHA) * 100);
+            const restan = Math.max(0, HUEVOS_POR_PLANCHA - cant);
+            const casiLleno = cant >= HUEVOS_POR_PLANCHA - 3 && cant > 0;
+            const p = paletas[String(idx % 8)];
+            return (
+              <div key={t.id} className={`rounded-xl border bg-gradient-to-br ${p.grad} ${p.border} p-3 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5`}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-xs font-bold uppercase tracking-wide ${p.text}`}>{t.nombre}</p>
+                  {casiLleno && (
+                    <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800 ring-1 ring-amber-300/50 animate-pulse">
+                      ¡Casi!
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 flex items-baseline gap-1">
+                  <p className={`text-2xl font-bold tabular-nums leading-none ${p.text}`}>{cant}</p>
+                  <p className={`text-[10px] font-medium ${p.text} opacity-70`}>/ 30 huevos</p>
+                </div>
+                <div className={`mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/60`}>
+                  <div className={`h-full ${p.bar} transition-all duration-500 ease-out`} style={{ width: `${porcentaje}%` }} />
+                </div>
+                <p className={`mt-1 text-[10px] ${p.text} opacity-80`}>
+                  {cant === 0 ? "Sin sueltos" : cant >= HUEVOS_POR_PLANCHA ? "¡Plancha lista!" : `Faltan ${restan} para plancha`}
+                </p>
               </div>
-              <div className="mt-1.5 flex items-baseline gap-1">
-                <p className={`text-2xl font-bold tabular-nums leading-none ${p.text}`}>{cant}</p>
-                <p className={`text-[10px] font-medium ${p.text} opacity-70`}>/ 30 huevos</p>
-              </div>
-              <div className={`mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/60`}>
-                <div
-                  className={`h-full ${p.bar} transition-all duration-500 ease-out`}
-                  style={{ width: `${porcentaje}%` }}
-                />
-              </div>
-              <p className={`mt-1 text-[10px] ${p.text} opacity-80`}>
-                {cant === 0
-                  ? "Sin sueltos"
-                  : cant >= HUEVOS_POR_PLANCHA
-                    ? "¡Plancha lista!"
-                    : `Faltan ${restan} para plancha`}
-              </p>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -420,7 +433,7 @@ function KpiCard({ label, value, icon, tone = "slate" }: { label: string; value:
   );
 }
 
-/* ─── MODAL: editar clasificación ────────────────────────────────────────── */
+/* ─── MODAL: editar clasificación (detalle por tipo) ────────────────────── */
 
 function ModalClasificacion({
   clasificacion, tipos, onClose, onGuardar,
@@ -428,7 +441,7 @@ function ModalClasificacion({
   clasificacion: Clasificacion;
   tipos: TipoHuevo[];
   onClose: () => void;
-  onGuardar: (c: Clasificacion) => void;
+  onGuardar: (detalle: LineaClasificacion[]) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [cantidades, setCantidades] = useState<Record<string, number>>(() => {
     const base: Record<string, number> = {};
@@ -438,17 +451,23 @@ function ModalClasificacion({
     }
     return base;
   });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const totalClasificado = Object.values(cantidades).reduce((s, n) => s + (n || 0), 0);
   const porClasificar = clasificacion.cantidad_huevos - clasificacion.bajas - totalClasificado;
 
-  function guardar() {
+  async function guardar() {
+    setError(null);
+    setGuardando(true);
     const detalleArr: LineaClasificacion[] = tipos.map((t) => {
       const cant = cantidades[t.id] ?? 0;
       const { planchas, unidades } = calcularPlanchasUnidades(cant);
       return { tipo_id: t.id, cantidad: cant, planchas, unidades };
     }).filter((d) => d.cantidad > 0);
-    onGuardar({ ...clasificacion, detalle: detalleArr });
+    const r = await onGuardar(detalleArr);
+    setGuardando(false);
+    if (!r.ok) setError(r.error ?? "Error al guardar");
   }
 
   return (
@@ -462,7 +481,6 @@ function ModalClasificacion({
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-md p-1 text-slate-400 hover:bg-slate-100">✕</button>
         </div>
 
-        {/* Header estilo del PHP */}
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
           <ReadonlyField label="Galpón" value={clasificacion.galpon} />
           <ReadonlyField label="Fecha" value={fmtFechaHora(clasificacion.fecha)} />
@@ -476,7 +494,6 @@ function ModalClasificacion({
           />
         </div>
 
-        {/* Tabla clasificación */}
         <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
           <table className="w-full text-sm">
             <thead>
@@ -488,7 +505,9 @@ function ModalClasificacion({
               </tr>
             </thead>
             <tbody>
-              {tipos.map((t) => {
+              {tipos.length === 0 ? (
+                <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400 text-sm">Sin tipos de huevo cargados. Definilos primero desde "Tipos de huevos".</td></tr>
+              ) : tipos.map((t) => {
                 const cant = cantidades[t.id] ?? 0;
                 const { planchas, unidades } = calcularPlanchasUnidades(cant);
                 return (
@@ -521,14 +540,17 @@ function ModalClasificacion({
           1 plancha = {HUEVOS_POR_PLANCHA} huevos · las unidades son los sobrantes que no llenan una plancha completa.
         </p>
 
+        {error && <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
+
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Cancelar</button>
+          <button type="button" onClick={onClose} disabled={guardando} className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">Cancelar</button>
           <button
             type="button"
             onClick={guardar}
-            className="rounded-md bg-[#22c55e] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a]"
+            disabled={guardando || tipos.length === 0}
+            className="rounded-md bg-[#22c55e] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a] disabled:opacity-60"
           >
-            Registrar
+            {guardando ? "Guardando…" : "Registrar"}
           </button>
         </div>
       </div>
@@ -555,38 +577,74 @@ function ReadonlyField({
   );
 }
 
-/* ─── MODAL: catálogo de tipos de huevo ──────────────────────────────────── */
+/* ─── MODAL: catálogo de tipos de huevo (real, vía API) ─────────────────── */
 
 function ModalTipos({
-  tipos, setTipos, onClose,
+  tipos, onClose, onChange,
 }: {
   tipos: TipoHuevo[];
-  setTipos: React.Dispatch<React.SetStateAction<TipoHuevo[]>>;
   onClose: () => void;
+  onChange: () => Promise<void> | void;
 }) {
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editandoNombre, setEditandoNombre] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pendiente, setPendiente] = useState(false);
 
-  function agregar() {
+  async function agregar() {
     const n = nuevoNombre.trim();
     if (!n) return;
-    const nextCodigo = tipos.length > 0 ? Math.max(...tipos.map((t) => t.codigo)) + 1 : 1;
-    setTipos((prev) => [...prev, { id: crypto.randomUUID(), codigo: nextCodigo, nombre: n }]);
-    setNuevoNombre("");
+    setPendiente(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/granja/tipos-huevo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nombre: n }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error?.message ?? "Error al agregar");
+      setNuevoNombre("");
+      await onChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally { setPendiente(false); }
   }
 
-  function guardarEdit() {
+  async function guardarEdit() {
     if (!editandoId) return;
     const n = editandoNombre.trim();
     if (!n) return;
-    setTipos((prev) => prev.map((t) => (t.id === editandoId ? { ...t, nombre: n } : t)));
-    setEditandoId(null);
-    setEditandoNombre("");
+    setPendiente(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/granja/tipos-huevo/${editandoId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nombre: n }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error?.message ?? "Error al editar");
+      setEditandoId(null); setEditandoNombre("");
+      await onChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally { setPendiente(false); }
   }
 
-  function borrar(id: string) {
-    setTipos((prev) => prev.filter((t) => t.id !== id));
+  async function borrar(id: string) {
+    if (!confirm("¿Borrar este tipo de huevo?")) return;
+    setPendiente(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/granja/tipos-huevo/${id}`, { method: "DELETE" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error?.message ?? "Error al borrar");
+      await onChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally { setPendiente(false); }
   }
 
   return (
@@ -600,7 +658,6 @@ function ModalTipos({
           <button type="button" onClick={onClose} aria-label="Cerrar" className="rounded-md p-1 text-slate-400 hover:bg-slate-100">✕</button>
         </div>
 
-        {/* Formulario alta */}
         <div className="mt-4 flex gap-2">
           <input
             type="text"
@@ -613,13 +670,15 @@ function ModalTipos({
           <button
             type="button"
             onClick={agregar}
-            className="rounded-md bg-[#22c55e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#16a34a]"
+            disabled={pendiente}
+            className="rounded-md bg-[#22c55e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#16a34a] disabled:opacity-60"
           >
             + Agregar
           </button>
         </div>
 
-        {/* Tabla catálogo */}
+        {error && <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
+
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
           <table className="w-full text-sm">
             <thead>
@@ -653,13 +712,13 @@ function ModalTipos({
                     <div className="inline-flex items-center gap-1.5">
                       {editandoId === t.id ? (
                         <>
-                          <button type="button" onClick={guardarEdit} className="rounded-md border border-emerald-200 bg-white px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50">Guardar</button>
+                          <button type="button" onClick={guardarEdit} disabled={pendiente} className="rounded-md border border-emerald-200 bg-white px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-60">Guardar</button>
                           <button type="button" onClick={() => { setEditandoId(null); setEditandoNombre(""); }} className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50">Cancelar</button>
                         </>
                       ) : (
                         <>
                           <button type="button" onClick={() => { setEditandoId(t.id); setEditandoNombre(t.nombre); }} className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">Editar</button>
-                          <button type="button" onClick={() => borrar(t.id)} className="rounded-md border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">Borrar</button>
+                          <button type="button" onClick={() => borrar(t.id)} disabled={pendiente} className="rounded-md border border-rose-200 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-60">Borrar</button>
                         </>
                       )}
                     </div>
@@ -678,23 +737,25 @@ function ModalTipos({
   );
 }
 
-/* ─── MODAL: nueva clasificación (paso 1: cabecera) ──────────────────────── */
-
-const GALPONES_OPCIONES_CLAS = ["GALPON 1", "GALPON 2", "GALPON 3", "GALPON 4"];
+/* ─── MODAL: nueva clasificación (cabecera) ─────────────────────────────── */
 
 function ahoraIsoLocal(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function ModalNueva({
-  onClose, onCrear,
+  galpones, onClose, onCrear,
 }: {
+  galpones: GalponOpt[];
   onClose: () => void;
-  onCrear: (base: Omit<Clasificacion, "id" | "codigo" | "detalle">) => void;
+  onCrear: (base: {
+    galpon_id: string; fecha: string; cantidad_huevos: number; bajas: number;
+    responsable: string; fecha_distribucion: string | null; resp_distribucion: string;
+  }) => Promise<{ ok: boolean; error?: string; clasificacion?: Clasificacion }>;
 }) {
-  const [galpon, setGalpon] = useState(GALPONES_OPCIONES_CLAS[0]);
+  const [galponId, setGalponId] = useState(galpones[0]?.id ?? "");
   const [fecha, setFecha] = useState(ahoraIsoLocal());
   const [cantidad, setCantidad] = useState("");
   const [bajas, setBajas] = useState("0");
@@ -702,23 +763,32 @@ function ModalNueva({
   const [fechaDist, setFechaDist] = useState("");
   const [respDist, setRespDist] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pendiente, setPendiente] = useState(false);
 
-  function crear() {
-    if (!galpon) { setError("Seleccioná un galpón."); return; }
+  useEffect(() => {
+    if (!galponId && galpones[0]) setGalponId(galpones[0].id);
+  }, [galpones, galponId]);
+
+  async function crear() {
+    if (!galponId) { setError("Seleccioná un galpón."); return; }
     const c = Number(cantidad);
     if (!Number.isFinite(c) || c <= 0) { setError("La cantidad de huevos debe ser mayor a 0."); return; }
     const b = Number(bajas);
     if (!Number.isFinite(b) || b < 0) { setError("Las bajas deben ser un número positivo o cero."); return; }
     if (!responsable.trim()) { setError("El responsable es obligatorio."); return; }
-    onCrear({
-      galpon,
-      fecha: fecha || ahoraIsoLocal(),
+    setPendiente(true);
+    setError(null);
+    const r = await onCrear({
+      galpon_id: galponId,
+      fecha: fecha ? new Date(fecha).toISOString() : new Date().toISOString(),
       cantidad_huevos: c,
       bajas: b,
       responsable: responsable.trim(),
-      fecha_distribucion: fechaDist || null,
+      fecha_distribucion: fechaDist ? new Date(fechaDist).toISOString() : null,
       resp_distribucion: respDist.trim(),
     });
+    setPendiente(false);
+    if (!r.ok) setError(r.error ?? "Error al crear");
   }
 
   return (
@@ -736,19 +806,22 @@ function ModalNueva({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-slate-600">Galpón *</label>
-              <select
-                value={galpon}
-                onChange={(e) => setGalpon(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              >
-                {GALPONES_OPCIONES_CLAS.map((g) => <option key={g} value={g}>{g}</option>)}
-              </select>
+              {galpones.length === 0 ? (
+                <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Sin galpones cargados. Creá uno en /galpones primero.</p>
+              ) : (
+                <select
+                  value={galponId}
+                  onChange={(e) => setGalponId(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                >
+                  {galpones.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                </select>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Fecha y hora *</label>
               <input
                 type="datetime-local"
-                step={1}
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
@@ -799,7 +872,6 @@ function ModalNueva({
                 <label className="text-xs font-medium text-slate-600">Fecha distribución</label>
                 <input
                   type="datetime-local"
-                  step={1}
                   value={fechaDist}
                   onChange={(e) => setFechaDist(e.target.value)}
                   className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
@@ -827,20 +899,21 @@ function ModalNueva({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            disabled={pendiente}
+            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
             Cancelar
           </button>
           <button
             type="button"
             onClick={crear}
-            className="rounded-md bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md active:scale-[.98]"
+            disabled={pendiente || galpones.length === 0}
+            className="rounded-md bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md active:scale-[.98] disabled:opacity-60"
           >
-            Continuar a clasificar →
+            {pendiente ? "Creando…" : "Continuar a clasificar →"}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
