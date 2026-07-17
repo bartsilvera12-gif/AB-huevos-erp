@@ -3,7 +3,7 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 
-const COLS = "id, empresa_id, codigo, nombre, created_at, updated_at";
+const COLS = "id, empresa_id, codigo, nombre, producto_id, created_at, updated_at";
 
 /** PATCH /api/granja/tipos-huevo/[id] — renombrar tipo. */
 export async function PATCH(
@@ -15,12 +15,15 @@ export async function PATCH(
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const { supabase, auth } = ctx;
-    const body = (await request.json().catch(() => ({}))) as { nombre?: string };
+    const body = (await request.json().catch(() => ({}))) as { nombre?: string; producto_id?: string | null };
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (body.nombre !== undefined) {
       const n = String(body.nombre).trim();
       if (!n) return NextResponse.json(errorResponse("Nombre inválido."), { status: 400 });
       patch.nombre = n;
+    }
+    if (body.producto_id !== undefined) {
+      patch.producto_id = body.producto_id ? String(body.producto_id).trim() : null;
     }
     const { data, error } = await supabase
       .from("granja_tipos_huevo")

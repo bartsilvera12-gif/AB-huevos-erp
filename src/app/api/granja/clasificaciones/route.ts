@@ -4,13 +4,14 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 
 const COLS =
-  "id, empresa_id, codigo, galpon_id, fecha, cantidad_huevos, bajas, responsable, fecha_distribucion, resp_distribucion, created_at, updated_at";
+  "id, empresa_id, codigo, galpon_id, fecha, cantidad_huevos, bajas, responsable, fecha_distribucion, resp_distribucion, stock_aplicado, created_at, updated_at";
 
 type ClasRow = {
   id: string; codigo: number; galpon_id: string;
   fecha: string; cantidad_huevos: number; bajas: number;
   responsable: string;
   fecha_distribucion: string | null; resp_distribucion: string | null;
+  stock_aplicado: boolean | null;
   granja_galpones?: { id: string; nombre: string } | { id: string; nombre: string }[];
 };
 
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
         responsable: rr.responsable,
         fecha_distribucion: rr.fecha_distribucion,
         resp_distribucion: rr.resp_distribucion ?? "",
+        stock_aplicado: !!rr.stock_aplicado,
         detalle: detalleMap[rr.id] ?? [],
       };
     });
@@ -139,6 +141,7 @@ export async function POST(request: NextRequest) {
         responsable: row.responsable,
         fecha_distribucion: row.fecha_distribucion,
         resp_distribucion: row.resp_distribucion ?? "",
+        stock_aplicado: false,
         detalle: [],
       },
     }));

@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Egg, ListChecks, Layers, Sparkles, PiggyBank, Tags } from "lucide-react";
 
-type TipoHuevo = { id: string; codigo: number; nombre: string };
+type TipoHuevo = { id: string; codigo: number; nombre: string; producto_id?: string | null };
 type GalponOpt = { id: string; nombre: string };
+type ProductoOpt = { id: string; nombre: string; sku: string | null };
 
 type LineaClasificacion = {
   tipo_id: string;
@@ -30,6 +31,7 @@ type Clasificacion = {
   responsable: string;
   fecha_distribucion: string | null;
   resp_distribucion: string;
+  stock_aplicado: boolean;
   detalle: LineaClasificacion[];
 };
 
@@ -63,6 +65,7 @@ export default function ClasificacionPage() {
   const [clasificaciones, setClasificaciones] = useState<Clasificacion[]>([]);
   const [tipos, setTipos] = useState<TipoHuevo[]>([]);
   const [galpones, setGalpones] = useState<GalponOpt[]>([]);
+  const [productos, setProductos] = useState<ProductoOpt[]>([]);
   const [acumulador, setAcumulador] = useState<Record<string, number>>({});
   const [cargando, setCargando] = useState(true);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
@@ -77,13 +80,14 @@ export default function ClasificacionPage() {
     setCargando(true);
     setErrorGeneral(null);
     try {
-      const [rC, rT, rG, rS] = await Promise.all([
+      const [rC, rT, rG, rS, rP] = await Promise.all([
         fetch("/api/granja/clasificaciones", { cache: "no-store" }),
         fetch("/api/granja/tipos-huevo", { cache: "no-store" }),
         fetch("/api/granja/galpones", { cache: "no-store" }),
         fetch("/api/granja/sueltos", { cache: "no-store" }),
+        fetch("/api/productos", { cache: "no-store" }),
       ]);
-      const [jC, jT, jG, jS] = await Promise.all([rC.json(), rT.json(), rG.json(), rS.json()]);
+      const [jC, jT, jG, jS, jP] = await Promise.all([rC.json(), rT.json(), rG.json(), rS.json(), rP.json()]);
       if (!rC.ok) throw new Error(jC?.error?.message ?? "Error cargando clasificaciones");
       if (!rT.ok) throw new Error(jT?.error?.message ?? "Error cargando tipos");
       if (!rG.ok) throw new Error(jG?.error?.message ?? "Error cargando galpones");
@@ -92,6 +96,9 @@ export default function ClasificacionPage() {
       setTipos(jT.data?.tipos ?? []);
       setGalpones((jG.data?.galpones ?? []).map((g: { id: string; nombre: string }) => ({ id: g.id, nombre: g.nombre })));
       setAcumulador(jS.data?.acumulador ?? {});
+      if (rP.ok) {
+        setProductos((jP.data?.productos ?? []).map((p: { id: string; nombre: string; sku: string | null }) => ({ id: p.id, nombre: p.nombre, sku: p.sku })));
+      }
     } catch (e) {
       setErrorGeneral(e instanceof Error ? e.message : "Error");
     } finally {
@@ -255,13 +262,18 @@ export default function ClasificacionPage() {
                     <td className="px-5 py-4 text-slate-700 tabular-nums text-xs">{fmtFechaHora(c.fecha_distribucion)}</td>
                     <td className="px-5 py-4 text-slate-700">{c.resp_distribucion || "—"}</td>
                     <td className="px-5 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setEditando(c)}
-                        className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
-                      >
-                        Editar
-                      </button>
+                      <div className="inline-flex items-center gap-2">
+                        {c.stock_aplicado && (
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Aplicada</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setEditando(c)}
+                          className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                        >
+                          {c.stock_aplicado ? "Ver" : "Clasificar"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -302,6 +314,7 @@ export default function ClasificacionPage() {
       {tiposModalOpen && (
         <ModalTipos
           tipos={tipos}
+          productos={productos}
           onClose={() => setTiposModalOpen(false)}
           onChange={cargarTodo}
         />
@@ -518,8 +531,9 @@ function ModalClasificacion({
                         type="number"
                         min={0}
                         value={cant}
+                        readOnly={clasificacion.stock_aplicado}
                         onChange={(e) => setCantidades((prev) => ({ ...prev, [t.id]: Number(e.target.value) || 0 }))}
-                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-right text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                        className={`w-full rounded-md border px-2 py-1 text-right text-sm outline-none ${clasificacion.stock_aplicado ? "border-slate-200 bg-slate-50 text-slate-600" : "border-slate-300 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"}`}
                       />
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{planchas}</td>
@@ -540,18 +554,27 @@ function ModalClasificacion({
           1 plancha = {HUEVOS_POR_PLANCHA} huevos · las unidades son los sobrantes que no llenan una plancha completa.
         </p>
 
+        {clasificacion.stock_aplicado && (
+          <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            Esta clasificación ya fue aplicada al inventario. El detalle es solo lectura.
+          </div>
+        )}
         {error && <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={guardando} className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">Cancelar</button>
-          <button
-            type="button"
-            onClick={guardar}
-            disabled={guardando || tipos.length === 0}
-            className="rounded-md bg-[#22c55e] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a] disabled:opacity-60"
-          >
-            {guardando ? "Guardando…" : "Registrar"}
+          <button type="button" onClick={onClose} disabled={guardando} className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+            {clasificacion.stock_aplicado ? "Cerrar" : "Cancelar"}
           </button>
+          {!clasificacion.stock_aplicado && (
+            <button
+              type="button"
+              onClick={guardar}
+              disabled={guardando || tipos.length === 0}
+              className="rounded-md bg-[#22c55e] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a] disabled:opacity-60"
+            >
+              {guardando ? "Guardando…" : "Registrar y aplicar a inventario"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -580,9 +603,10 @@ function ReadonlyField({
 /* ─── MODAL: catálogo de tipos de huevo (real, vía API) ─────────────────── */
 
 function ModalTipos({
-  tipos, onClose, onChange,
+  tipos, productos, onClose, onChange,
 }: {
   tipos: TipoHuevo[];
+  productos: ProductoOpt[];
   onClose: () => void;
   onChange: () => Promise<void> | void;
 }) {
@@ -679,18 +703,22 @@ function ModalTipos({
 
         {error && <div className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
 
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+        <p className="mt-4 text-[11px] text-slate-500">
+          Vinculá cada tipo con un producto del inventario. Al aplicar una clasificación, las planchas suman stock al producto vinculado.
+        </p>
+        <div className="mt-2 overflow-hidden rounded-xl border border-slate-200">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-2.5 w-16">Cod.</th>
+                <th className="px-4 py-2.5 w-14">Cod.</th>
                 <th className="px-4 py-2.5">Nombre</th>
+                <th className="px-4 py-2.5">Producto inventario</th>
                 <th className="px-4 py-2.5 text-right">Acción</th>
               </tr>
             </thead>
             <tbody>
               {tipos.length === 0 ? (
-                <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400 text-sm">Sin tipos definidos.</td></tr>
+                <tr><td colSpan={4} className="px-4 py-6 text-center text-slate-400 text-sm">Sin tipos definidos.</td></tr>
               ) : tipos.map((t) => (
                 <tr key={t.id} className="border-b border-slate-100 last:border-0">
                   <td className="px-4 py-2 font-mono text-xs text-slate-500">{t.codigo}</td>
@@ -707,6 +735,32 @@ function ModalTipos({
                     ) : (
                       <span className="font-medium text-slate-800">{t.nombre}</span>
                     )}
+                  </td>
+                  <td className="px-4 py-2">
+                    <select
+                      value={t.producto_id ?? ""}
+                      onChange={async (e) => {
+                        setPendiente(true); setError(null);
+                        try {
+                          const r = await fetch(`/api/granja/tipos-huevo/${t.id}`, {
+                            method: "PATCH",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({ producto_id: e.target.value || null }),
+                          });
+                          const j = await r.json();
+                          if (!r.ok) throw new Error(j?.error?.message ?? "Error");
+                          await onChange();
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : "Error");
+                        } finally { setPendiente(false); }
+                      }}
+                      className="w-full max-w-[220px] rounded-md border border-slate-300 px-2 py-1 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    >
+                      <option value="">— sin vincular —</option>
+                      {productos.map((p) => (
+                        <option key={p.id} value={p.id}>{p.nombre}{p.sku ? ` (${p.sku})` : ""}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-2 text-right">
                     <div className="inline-flex items-center gap-1.5">
