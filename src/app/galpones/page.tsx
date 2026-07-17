@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Warehouse, Home, CheckCircle2, Users } from "lucide-react";
+import GranjaStepper from "@/components/granja/GranjaStepper";
 
 /**
  * DEMO estática del módulo Galpones — sin conexión a la DB.
@@ -51,6 +52,8 @@ export default function GalponesPage() {
 
   return (
     <div className="space-y-6">
+      <GranjaStepper current="galpones" />
+
       <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-[#4FAEB2]/[0.02] to-[#4FAEB2]/[0.05] p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-1">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4FAEB2]/30 bg-[#4FAEB2]/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#3F8E91]">
