@@ -48,68 +48,7 @@ const TIPOS_DEMO: TipoHuevo[] = [
   { id: "t8", codigo: 8, nombre: "Sucio" },
 ];
 
-const CLASIFICACIONES_DEMO: Clasificacion[] = [
-  {
-    id: "c1", codigo: 11, galpon: "GALPON 3", fecha: "2025-03-21T06:03:25",
-    cantidad_huevos: 9840, bajas: 0, responsable: "luzovelar",
-    fecha_distribucion: "2025-03-21T18:19:54", resp_distribucion: "luzovelar",
-    detalle: [
-      { tipo_id: "t1", cantidad: 30,   planchas: 1,   unidades: 0 },
-      { tipo_id: "t2", cantidad: 2190, planchas: 73,  unidades: 0 },
-      { tipo_id: "t3", cantidad: 5040, planchas: 168, unidades: 0 },
-      { tipo_id: "t4", cantidad: 990,  planchas: 33,  unidades: 0 },
-      { tipo_id: "t5", cantidad: 30,   planchas: 1,   unidades: 0 },
-      { tipo_id: "t6", cantidad: 93,   planchas: 3,   unidades: 3 },
-      { tipo_id: "t7", cantidad: 630,  planchas: 21,  unidades: 0 },
-      { tipo_id: "t8", cantidad: 780,  planchas: 26,  unidades: 0 },
-    ],
-  },
-  {
-    id: "c2", codigo: 10, galpon: "GALPON 3", fecha: "2025-03-20T06:03:24",
-    cantidad_huevos: 9720, bajas: 0, responsable: "luzovelar",
-    fecha_distribucion: "2025-03-20T18:07:57", resp_distribucion: "luzovelar", detalle: [],
-  },
-  {
-    id: "c3", codigo: 9, galpon: "GALPON 1", fecha: "2025-03-19T05:03:01",
-    cantidad_huevos: 15180, bajas: 0, responsable: "luzovelar",
-    fecha_distribucion: "2025-03-20T17:28:12", resp_distribucion: "luzovelar", detalle: [],
-  },
-  {
-    id: "c4", codigo: 8, galpon: "GALPON 4", fecha: "2025-03-19T09:03:30",
-    cantidad_huevos: 13080, bajas: 0, responsable: "luzovelar",
-    fecha_distribucion: "2025-03-20T09:10:02", resp_distribucion: "luzovelar", detalle: [],
-  },
-  {
-    id: "c5", codigo: 7, galpon: "GALPON 3", fecha: "2025-03-19T05:03:39",
-    cantidad_huevos: 9780, bajas: 0, responsable: "luzovelar",
-    fecha_distribucion: "2025-03-19T17:47:25", resp_distribucion: "luzovelar", detalle: [],
-  },
-  {
-    id: "c6", codigo: 6, galpon: "GALPON 4", fecha: "2025-03-18T09:03:55",
-    cantidad_huevos: 13050, bajas: 0, responsable: "luzovelar",
-    fecha_distribucion: "2025-03-19T09:06:22", resp_distribucion: "luzovelar", detalle: [],
-  },
-  {
-    id: "c7", codigo: 5, galpon: "GALPON 3", fecha: "2025-03-18T06:03:37",
-    cantidad_huevos: 9570, bajas: 0, responsable: "luzovelar",
-    fecha_distribucion: "2025-03-18T18:02:03", resp_distribucion: "luzovelar", detalle: [],
-  },
-  {
-    id: "c8", codigo: 4, galpon: "GALPON 1", fecha: "2025-03-17T05:03:13",
-    cantidad_huevos: 15180, bajas: 0, responsable: "luzovelar",
-    fecha_distribucion: "2025-03-18T17:09:44", resp_distribucion: "luzovelar", detalle: [],
-  },
-  {
-    id: "c9", codigo: 3, galpon: "GALPON 4", fecha: "2025-03-17T05:03:08",
-    cantidad_huevos: 13200, bajas: 0, responsable: "luzovelar",
-    fecha_distribucion: "2025-03-18T17:07:37", resp_distribucion: "luzovelar", detalle: [],
-  },
-  {
-    id: "c10", codigo: 1, galpon: "GALPON 1", fecha: "2025-03-17T11:03:01",
-    cantidad_huevos: 47370, bajas: 0, responsable: "juliorock",
-    fecha_distribucion: "2025-03-21T10:11:37", resp_distribucion: "juliorock", detalle: [],
-  },
-];
+const CLASIFICACIONES_DEMO: Clasificacion[] = [];
 
 function fmtNumero(n: number): string {
   return n.toLocaleString("es-PY");
@@ -139,16 +78,7 @@ export default function ClasificacionPage() {
 
   // Acumulador de huevos sueltos por tipo. Cuando llega a 30, se convierte
   // automáticamente en una plancha completa y va al stock de inventario.
-  const [acumulador, setAcumulador] = useState<Record<string, number>>({
-    t1: 15,  // Jumbo — 15/30
-    t2: 27,  // Super — 27/30 (casi lleno)
-    t3: 3,   // Tipo A — 3/30
-    t4: 0,   // Tipo B — vacío
-    t5: 12,  // Tipo C — 12/30
-    t6: 22,  // Picado — 22/30
-    t7: 0,   // Roto — sin definir aún
-    t8: 8,   // Sucio — 8/30
-  });
+  const [acumulador, setAcumulador] = useState<Record<string, number>>({});
   const [toastMensaje, setToastMensaje] = useState<string | null>(null);
 
   /**
