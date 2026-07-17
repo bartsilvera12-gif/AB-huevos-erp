@@ -32,6 +32,9 @@ const SIDEBAR_SLUG_HREF_ORDER: { slug: string; href: string }[] = [
   { slug: "campanas", href: "/dashboard/campanas" },
   { slug: "proyectos", href: "/dashboard/proyectos" },
   { slug: "agenda", href: "/dashboard/agenda" },
+  { slug: "galpones", href: "/galpones" },
+  { slug: "produccion_huevos", href: "/produccion" },
+  { slug: "clasificacion_huevos", href: "/clasificacion" },
 ];
 
 const OMNICANAL_DASHBOARD_SLUGS = [
@@ -94,10 +97,6 @@ export function canAccessSidebarSlug(
   opts?: { strict?: boolean }
 ): boolean {
   if (esSuperAdmin) return true;
-  // DEMO: galpones, producción y clasificación_huevos siempre visibles en el sidebar (aún no están en la DB de módulos).
-  if (slug === "galpones") return true;
-  if (slug === "produccion_huevos") return true;
-  if (slug === "clasificacion_huevos") return true;
   if (slug === "dashboard") return grantedSlugs.has("dashboard");
   return isModuleSlugGranted(slug, grantedSlugs, inactiveSlugs, opts);
 }
@@ -144,10 +143,9 @@ export function pathRequiresModuleSlug(pathname: string): string | null {
   if (p.startsWith("/ventas")) return "ventas";
   if (p.startsWith("/inventario")) return "inventario";
   if (p.startsWith("/clientes")) return "clientes";
-  // DEMO: /galpones, /produccion y /clasificacion no exigen módulo en DB — solo requieren estar autenticado.
-  if (p.startsWith("/galpones")) return null;
-  if (p.startsWith("/produccion")) return null;
-  if (p.startsWith("/clasificacion")) return null;
+  if (p.startsWith("/galpones")) return "galpones";
+  if (p.startsWith("/produccion")) return "produccion_huevos";
+  if (p.startsWith("/clasificacion")) return "clasificacion_huevos";
   if (p.startsWith("/proveedores")) return "compras";
   if (p.startsWith("/compras")) return "compras";
   if (p.startsWith("/gastos")) return "gastos";
