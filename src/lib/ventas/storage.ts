@@ -13,7 +13,7 @@ export type FaltanteStock = {
 };
 
 export type ResultadoGuardarVenta =
-  | { success: true; venta: Venta; factura_id?: string | null; numero_factura?: string | null }
+  | { success: true; venta: Venta; factura_id?: string | null; numero_factura?: string | null; factura_error?: string | null }
   | { success: false; error: string; faltantes?: FaltanteStock[] };
 
 /** Modalidad del pedido (instancia gastronómica En lo de Mari). */
@@ -98,7 +98,7 @@ export async function saveVenta(
 
     const json = (await res.json()) as {
       success?: boolean;
-      data?: { venta?: Venta; factura_id?: string | null; numero_factura?: string | null };
+      data?: { venta?: Venta; factura_id?: string | null; numero_factura?: string | null; factura_error?: string | null };
       error?: string;
       faltantes?: FaltanteStock[];
     };
@@ -116,6 +116,7 @@ export async function saveVenta(
       venta: json.data.venta,
       factura_id: json.data.factura_id ?? null,
       numero_factura: json.data.numero_factura ?? null,
+      factura_error: json.data.factura_error ?? null,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error de red.";

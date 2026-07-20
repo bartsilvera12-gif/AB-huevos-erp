@@ -718,6 +718,9 @@ export default function NuevaVentaPage() {
       // Si además se generó factura electrónica, abrir el detalle para firmar/enviar.
       if (resultado.factura_id) {
         try { window.open(`/facturas/${resultado.factura_id}`, "_blank", "noopener"); } catch {}
+      } else if (resultado.factura_error) {
+        // Bridge falló: mostrar el error al usuario. La venta sí quedó registrada.
+        alert(`La venta se registró (ticket), pero NO se pudo generar la factura electrónica:\n\n${resultado.factura_error}\n\nRevisá los datos del cliente / configuración SIFEN.`);
       }
       // Redirección directa a /ventas — el ticket ya se abrió en nueva pestaña.
       router.push("/ventas");
