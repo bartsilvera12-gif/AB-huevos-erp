@@ -715,6 +715,10 @@ export default function NuevaVentaPage() {
       // segunda pestaña puede ser bloqueada por el navegador → fallback con botones).
       try { window.open(ticketUrl, "_blank", "noopener"); } catch {}
       if (generaNota) { try { window.open(remisionUrl, "_blank", "noopener"); } catch {} }
+      // Si además se generó factura electrónica, abrir el detalle para firmar/enviar.
+      if (resultado.factura_id) {
+        try { window.open(`/facturas/${resultado.factura_id}`, "_blank", "noopener"); } catch {}
+      }
       // Redirección directa a /ventas — el ticket ya se abrió en nueva pestaña.
       router.push("/ventas");
     } finally {

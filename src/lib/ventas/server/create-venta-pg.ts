@@ -1,5 +1,6 @@
 import { createServiceRoleClientWithDbSchema } from "@/lib/supabase/empresa-data-schema";
 import { convertirCantidad } from "@/lib/unidades/convert";
+import { obtenerSiguienteNumeroFacturaEmpresa } from "@/lib/facturacion/factura-suscripcion-servidor";
 
 /** Un faltante de stock detectado al validar la venta. */
 export interface FaltanteStock {
@@ -106,7 +107,7 @@ const TOL = 2;
  */
 export async function createVentaTransaccionalPg(
   params: CreateVentaPgParams
-): Promise<{ ventaId: string; numeroControl: string; fechaIso: string; notaRemisionNumero: string | null; cuentaPorCobrarId?: string | null }> {
+): Promise<{ ventaId: string; numeroControl: string; fechaIso: string; notaRemisionNumero: string | null; cuentaPorCobrarId?: string | null; facturaId?: string | null; numeroFactura?: string | null }> {
   const items = params.items;
   if (!items.length) {
     throw new Error("La venta debe tener al menos un ítem.");
@@ -452,6 +453,16 @@ export async function createVentaTransaccionalPg(
       await sb.from("ventas_items").delete().eq("venta_id", ventaId).eq("empresa_id", params.empresaId);
     } catch {}
     try {
+      // Facturas creadas como bridge (si falló después de crearlas)
+      const fq = await sb.from("facturas").select("id").eq("origen_venta_id", ventaId).eq("empresa_id", params.empresaId);
+      const fids = ((fq.data ?? []) as Array<{ id: string }>).map((f) => f.id);
+      for (const fid of fids) {
+        try { await sb.from("factura_electronica").delete().eq("factura_id", fid); } catch {}
+        try { await sb.from("factura_items").delete().eq("factura_id", fid); } catch {}
+        try { await sb.from("facturas").delete().eq("id", fid); } catch {}
+      }
+    } catch {}
+    try {
       await sb.from("ventas").delete().eq("id", ventaId).eq("empresa_id", params.empresaId);
     } catch {}
   };
@@ -653,7 +664,89 @@ export async function createVentaTransaccionalPg(
       cuentaPorCobrarId = String((insCxc.data as { id: string }).id);
     }
 
-    return { ventaId, numeroControl, fechaIso, notaRemisionNumero, cuentaPorCobrarId };
+    // 9) Puente Venta → Factura (SIFEN) — solo si tipo_documento = 'factura'
+    let facturaId: string | null = null;
+    let numeroFactura: string | null = null;
+    if (params.tipoDocumento === "factura") {
+      if (!params.clienteId) {
+        throw new Error("Factura electrónica requiere cliente.");
+      }
+      // Snapshot cliente
+      const cliQ = await sb
+        .from("clientes")
+        .select("ruc, documento, razon_social, empresa, nombre")
+        .eq("empresa_id", params.empresaId)
+        .eq("id", params.clienteId)
+        .maybeSingle();
+      if (cliQ.error) throw new Error(`Cliente snapshot: ${cliQ.error.message}`);
+      const cli = (cliQ.data ?? {}) as { ruc?: string | null; documento?: string | null; razon_social?: string | null; empresa?: string | null; nombre?: string | null };
+      const clienteRuc = (cli.ruc ?? cli.documento ?? "").trim() || null;
+      const clienteRazonSocial = (cli.razon_social ?? cli.empresa ?? cli.nombre ?? "").trim() || null;
+
+      // Número siguiente
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      numeroFactura = await obtenerSiguienteNumeroFacturaEmpresa(sb as any, params.empresaId);
+
+      // Insert factura
+      const insFac = await sb
+        .from("facturas")
+        .insert({
+          empresa_id: params.empresaId,
+          cliente_id: params.clienteId,
+          numero_factura: numeroFactura,
+          estado: "emitida",
+          moneda: params.moneda === "USD" ? "USD" : "PYG",
+          total: calc.total,
+          subtotal: calc.subtotal,
+          monto_iva: calc.montoIva,
+          fecha: fechaIso,
+          origen_venta_id: ventaId,
+          cliente_razon_social: clienteRazonSocial,
+          cliente_ruc: clienteRuc,
+          observaciones: observacionesFinal,
+        })
+        .select("id")
+        .single();
+      if (insFac.error) throw new Error(`Factura: ${insFac.error.message}`);
+      facturaId = String((insFac.data as { id: string }).id);
+
+      // Items de la factura (mapea de ventas_items)
+      const facItems = items.map((line) => {
+        const iva = String(line.tipo_iva ?? "10%");
+        const ivaNorm = iva === "EXENTA" || iva === "5%" || iva === "10%" ? iva : "10%";
+        return {
+          empresa_id: params.empresaId,
+          factura_id: facturaId!,
+          descripcion: line.producto_nombre,
+          cantidad: line.cantidad,
+          precio_unitario: line.precio_venta,
+          subtotal: line.subtotal,
+          tipo_iva: ivaNorm,
+        };
+      });
+      const insFacItems = await sb.from("factura_items").insert(facItems);
+      if (insFacItems.error) throw new Error(`Factura items: ${insFacItems.error.message}`);
+
+      // Documento electrónico en borrador
+      const insDe = await sb
+        .from("factura_electronica")
+        .insert({
+          empresa_id: params.empresaId,
+          factura_id: facturaId!,
+          estado_sifen: "borrador",
+        });
+      if (insDe.error) throw new Error(`Factura electrónica: ${insDe.error.message}`);
+
+      // Link venta ↔ factura
+      const linkV = await sb
+        .from("ventas")
+        .update({ factura_id: facturaId })
+        .eq("empresa_id", params.empresaId)
+        .eq("id", ventaId);
+      if (linkV.error) throw new Error(`Link venta→factura: ${linkV.error.message}`);
+    }
+
+    return { ventaId, numeroControl, fechaIso, notaRemisionNumero, cuentaPorCobrarId, facturaId, numeroFactura };
   } catch (err) {
     await rollback();
     throw err;
