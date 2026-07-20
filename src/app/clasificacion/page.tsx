@@ -285,7 +285,7 @@ export default function ClasificacionPage() {
           <table className="w-full min-w-[960px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-                <th className="px-5 py-3 w-14">ID</th>
+                <th className="px-5 py-3 w-20">ID</th>
                 <th className="px-5 py-3">Galpón</th>
                 <th className="px-5 py-3">Fecha</th>
                 <th className="px-5 py-3 text-right">Cant. huevos</th>
@@ -308,20 +308,24 @@ export default function ClasificacionPage() {
                   return (
                   <Fragment key={f.key}>
                   <tr className={`border-b border-slate-100 last:border-0 transition-colors ${f.pendiente ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-[#4FAEB2]/[0.04]"}`}>
-                    <td className="px-5 py-4 font-mono text-xs text-slate-500">
-                      {!f.pendiente && (
-                        <button
-                          type="button"
-                          onClick={() => setExpandidos((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(f.key)) next.delete(f.key); else next.add(f.key);
-                            return next;
-                          })}
-                          className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded border border-slate-200 hover:bg-slate-100 text-slate-500"
-                          title={abierto ? "Ocultar detalle" : "Ver detalle por tipo"}
-                        >{abierto ? "▾" : "▸"}</button>
-                      )}
-                      {f.codigo}
+                    <td className="px-5 py-4 font-mono text-xs text-slate-500 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        {!f.pendiente ? (
+                          <button
+                            type="button"
+                            onClick={() => setExpandidos((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(f.key)) next.delete(f.key); else next.add(f.key);
+                              return next;
+                            })}
+                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-200 hover:bg-slate-100 text-slate-500"
+                            title={abierto ? "Ocultar detalle" : "Ver detalle por tipo"}
+                          >{abierto ? "▾" : "▸"}</button>
+                        ) : (
+                          <span className="inline-block h-5 w-5 shrink-0" />
+                        )}
+                        <span>{f.codigo}</span>
+                      </div>
                     </td>
                     <td className="px-5 py-4 font-semibold text-slate-800">{f.galpon}</td>
                     <td className="px-5 py-4 text-slate-700 tabular-nums">{fmtFechaHora(f.fecha)}</td>
