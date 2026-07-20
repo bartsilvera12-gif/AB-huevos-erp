@@ -733,7 +733,9 @@ export async function createVentaTransaccionalPg(
             descripcion: line.producto_nombre,
             cantidad: line.cantidad,
             precio_unitario: line.precio_venta,
-            subtotal: line.subtotal,
+            subtotal: line.subtotal,      // neto (sin IVA)
+            iva: line.monto_iva,          // monto de IVA por línea
+            total: line.total_linea,      // bruto (con IVA)
             tipo_iva: ivaNorm,
           };
         });
