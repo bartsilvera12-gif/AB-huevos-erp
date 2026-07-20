@@ -691,18 +691,20 @@ export async function createVentaTransaccionalPg(
         numeroFactura = await obtenerSiguienteNumeroFacturaEmpresa(sb as any, params.empresaId);
         console.log("[bridge] numero_factura siguiente", numeroFactura);
 
+        const fechaSolo = fechaIso.slice(0, 10);
         const insFac = await sb
           .from("facturas")
           .insert({
             empresa_id: params.empresaId,
             cliente_id: params.clienteId,
             numero_factura: numeroFactura,
-            estado: "emitida",
-            moneda: params.moneda === "USD" ? "USD" : "PYG",
-            total: calc.total,
-            subtotal: calc.subtotal,
-            monto_iva: calc.montoIva,
-            fecha: fechaIso,
+            estado: "Pendiente",
+            tipo: "venta",
+            moneda: params.moneda === "USD" ? "USD" : "GS",
+            monto: calc.total,
+            saldo: calc.total,
+            fecha: fechaSolo,
+            fecha_vencimiento: fechaSolo,
             origen_venta_id: ventaId,
             cliente_razon_social: clienteRazonSocial,
             cliente_ruc: clienteRuc,
