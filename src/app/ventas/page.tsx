@@ -453,6 +453,15 @@ export default function VentasPage() {
                               Nota de remisión
                             </a>
                           )}
+                          {v.factura_id && (
+                            <Link
+                              href={`/facturas/${v.factura_id}`}
+                              className="inline-flex items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                              title="Ver factura electrónica"
+                            >
+                              Factura
+                            </Link>
+                          )}
                           {!v.anulada && esFechaHoy(v.fecha) && (
                             <Link
                               href={`/ventas/${v.id}/editar`}
