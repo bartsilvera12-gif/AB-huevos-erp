@@ -178,10 +178,20 @@ function FacturaDetalleInner() {
           </p>
         </div>
         <div className="flex gap-2 print:hidden">
+          <a
+            href={`/api/facturas/${factura.id}/sifen/kude`}
+            target="_blank"
+            rel="noopener"
+            className="text-xs font-semibold px-3 py-2 rounded-lg bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] text-white shadow-sm hover:shadow-md"
+            title="Descargar KuDE oficial SIFEN (PDF)"
+          >
+            📄 Factura (KuDE)
+          </a>
           <button
             type="button"
             onClick={() => window.print()}
             className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
+            title="Imprimir vista actual (no oficial)"
           >
             Imprimir
           </button>
