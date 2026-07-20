@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Egg, ListChecks, Layers, Sparkles, PiggyBank, Tags } from "lucide-react";
 
 type TipoHuevo = { id: string; codigo: number; nombre: string; producto_id?: string | null };
@@ -63,6 +63,7 @@ export default function ClasificacionPage() {
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
 
   const [busqueda, setBusqueda] = useState("");
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
   const [editando, setEditando] = useState<Clasificacion | null>(null);
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [tiposModalOpen, setTiposModalOpen] = useState(false);
@@ -243,9 +244,24 @@ export default function ClasificacionPage() {
               ) : filtradas.length === 0 ? (
                 <tr><td colSpan={9} className="px-5 py-10 text-center text-sm text-slate-400">Sin registros que coincidan.</td></tr>
               ) : (
-                filtradas.map((c) => (
-                  <tr key={c.id} className="border-b border-slate-100 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors">
-                    <td className="px-5 py-4 font-mono text-xs text-slate-500">{c.codigo}</td>
+                filtradas.map((c) => {
+                  const abierto = expandidos.has(c.id);
+                  return (
+                  <Fragment key={c.id}>
+                  <tr className="border-b border-slate-100 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors">
+                    <td className="px-5 py-4 font-mono text-xs text-slate-500">
+                      <button
+                        type="button"
+                        onClick={() => setExpandidos((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
+                          return next;
+                        })}
+                        className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded border border-slate-200 hover:bg-slate-100 text-slate-500"
+                        title={abierto ? "Ocultar detalle" : "Ver detalle por tipo"}
+                      >{abierto ? "▾" : "▸"}</button>
+                      {c.codigo}
+                    </td>
                     <td className="px-5 py-4 font-semibold text-slate-800">{c.galpon}</td>
                     <td className="px-5 py-4 text-slate-700 tabular-nums">{fmtFechaHora(c.fecha)}</td>
                     <td className="px-5 py-4 text-right tabular-nums font-medium text-slate-800">{fmtNumero(c.cantidad_huevos)}</td>
@@ -288,7 +304,33 @@ export default function ClasificacionPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  {abierto && (
+                    <tr className="bg-slate-50/60">
+                      <td colSpan={9} className="px-8 py-3">
+                        {c.detalle.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic">Todavía no se cargó el desglose por tipo.</p>
+                        ) : (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {c.detalle.map((d) => {
+                              const tipo = tipos.find((t) => t.id === d.tipo_huevo_id);
+                              return (
+                                <div key={d.tipo_huevo_id} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs">
+                                  <div className="font-semibold text-slate-700">{tipo?.nombre ?? d.tipo_huevo_id.slice(0, 6)}</div>
+                                  <div className="text-slate-500 mt-0.5 tabular-nums">
+                                    {fmtNumero(d.cantidad)} huevos · <strong>{d.planchas_generadas}</strong> plancha(s)
+                                    {d.unidades_sobrantes > 0 && <> · <span className="text-amber-700">{d.unidades_sobrantes} sueltos</span></>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -482,7 +524,8 @@ function ModalClasificacion({
       return;
     }
     if (porClasificar > 0) {
-      if (!confirm(`Todavía quedan ${porClasificar} huevos sin clasificar. ¿Registrar igual?`)) return;
+      setError(`Faltan ${porClasificar} huevos por clasificar. El total tiene que llegar a 0 (verde).`);
+      return;
     }
     setGuardando(true);
     const detalleArr: LineaClasificacion[] = tipos.map((t) => {
