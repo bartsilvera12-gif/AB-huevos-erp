@@ -593,7 +593,7 @@ export default function Sidebar() {
     const access = (slug: string) =>
       canAccessSidebarSlug(slug, slugs, esSuperAdmin, inactiveSlugsSet, { strict: strictAllowlist });
     // Los slugs ocultos también se filtran de la sección de favoritos.
-    const hiddenSlugs = new Set(["usuarios"]);
+    const hiddenSlugs = new Set<string>();
     return MENU_STRUCTURE.filter(
       (item) =>
         !hiddenSlugs.has(item.slug) &&
@@ -610,7 +610,7 @@ export default function Sidebar() {
       canAccessSidebarSlug(slug, slugs, esSuperAdmin, inactiveSlugsSet, { strict: strictAllowlist });
     // Administración (Usuarios + Configuración) oculta del sidebar
     // (accesibles por URL directa /usuarios y /configuracion).
-    const hiddenSlugs = new Set(["usuarios"]);
+    const hiddenSlugs = new Set<string>();
     return MENU_STRUCTURE.filter(
       (item) =>
         !hiddenSlugs.has(item.slug) &&
