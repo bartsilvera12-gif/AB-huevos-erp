@@ -95,19 +95,17 @@ function formatGs(v: number): string {
 
 function formatFecha(iso: string): string {
   try {
+    // Paraguay = UTC-3 permanente desde octubre 2024 (sin horario de verano).
+    // Hardcodeamos el offset porque el tzdata del server (Postgres/Node)
+    // sigue devolviendo UTC-4 para 'America/Asuncion' (base de datos vieja).
     const d = new Date(iso);
-    // El servidor corre en UTC. Formateamos siempre en zona horaria de Asunción.
-    const parts = new Intl.DateTimeFormat("es-PY", {
-      timeZone: "America/Asuncion",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).formatToParts(d);
-    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-    return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
+    const py = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+    const dd = String(py.getUTCDate()).padStart(2, "0");
+    const mm = String(py.getUTCMonth() + 1).padStart(2, "0");
+    const yy = py.getUTCFullYear();
+    const hh = String(py.getUTCHours()).padStart(2, "0");
+    const mi = String(py.getUTCMinutes()).padStart(2, "0");
+    return `${dd}/${mm}/${yy} ${hh}:${mi}`;
   } catch {
     return iso;
   }
