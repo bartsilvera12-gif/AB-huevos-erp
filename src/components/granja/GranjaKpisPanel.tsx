@@ -1,23 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Egg, PieChart, Layers } from "lucide-react";
+import { Egg, PieChart } from "lucide-react";
 import Link from "next/link";
 
 type Data = {
   puesta_pct_7d: number;
   huevos_ultimos_7d: number;
-  total_gallinas: number;
+  total_gallinas_iniciales: number;
+  total_gallinas_activas: number;
   huevos_mes: number;
-  bajas_mes: number;
-  pct_bajas_mes: number;
+  bajas_gallinas_mes: number;
+  bajas_gallinas_totales: number;
+  pct_mortalidad_historica: number;
   por_galpon: Array<{
     galpon_id: string;
     nombre: string;
-    gallinas: number;
+    gallinas_iniciales: number;
+    gallinas_activas: number;
+    bajas_gallinas_totales: number;
     huevos_mes: number;
-    bajas_mes: number;
-    pct_bajas: number;
+    bajas_gallinas_mes: number;
     pct_del_total: number;
     puesta_pct_7d: number;
   }>;
@@ -56,20 +59,16 @@ export default function GranjaKpisPanel() {
     })();
   }, []);
 
-  if (cargando) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <p className="text-sm text-slate-400">Cargando indicadores de granja…</p>
-      </div>
-    );
-  }
-  if (error || !data) {
-    return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-        {error ?? "Sin datos de granja"}
-      </div>
-    );
-  }
+  if (cargando) return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm text-slate-400">Cargando indicadores de granja…</p>
+    </div>
+  );
+  if (error || !data) return (
+    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+      {error ?? "Sin datos de granja"}
+    </div>
+  );
 
   const puestaColor = colorPct(data.puesta_pct_7d);
 
@@ -86,13 +85,12 @@ export default function GranjaKpisPanel() {
         </div>
       </div>
 
-      {/* 4 KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">% Puesta (últimos 7 días)</p>
           <p className={`mt-2 text-3xl font-bold tabular-nums leading-none ${puestaColor}`}>{data.puesta_pct_7d}%</p>
           <p className="mt-2 text-[11px] text-slate-500">
-            {fmtNumero(data.huevos_ultimos_7d)} huevos · {fmtNumero(data.total_gallinas)} gallinas
+            {fmtNumero(data.huevos_ultimos_7d)} huevos · {fmtNumero(data.total_gallinas_activas)} gallinas activas
           </p>
         </div>
 
@@ -105,15 +103,15 @@ export default function GranjaKpisPanel() {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Bajas del mes</p>
-          <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-rose-700">{fmtNumero(data.bajas_mes)}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Bajas de gallinas (mes)</p>
+          <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-rose-700">{fmtNumero(data.bajas_gallinas_mes)}</p>
           <p className="mt-2 text-[11px] text-slate-500">
-            <strong>{data.pct_bajas_mes}%</strong> del total (huevos rotos / descartados)
+            Mortalidad total: {fmtNumero(data.bajas_gallinas_totales)} ({data.pct_mortalidad_historica}%)
           </p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Sin clasificar</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Huevos sin clasificar</p>
           <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-amber-700">{fmtNumero(data.huevos_sin_clasificar)}</p>
           <p className="mt-2 text-[11px] text-slate-500">
             {data.producciones_sin_clasificar} producción(es) pendiente(s)
@@ -121,7 +119,6 @@ export default function GranjaKpisPanel() {
         </div>
       </div>
 
-      {/* Distribución por galpón */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <PieChart className="h-4 w-4 text-slate-500" />
@@ -135,14 +132,19 @@ export default function GranjaKpisPanel() {
           <div className="space-y-2">
             {data.por_galpon.map((g) => (
               <div key={g.galpon_id}>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="font-medium text-slate-700">{g.nombre}</span>
+                <div className="flex justify-between text-xs mb-1 gap-2 flex-wrap">
+                  <span className="font-medium text-slate-700">
+                    {g.nombre}
+                    <span className="ml-2 text-[10px] text-slate-500 font-normal">
+                      ({fmtNumero(g.gallinas_activas)}/{fmtNumero(g.gallinas_iniciales)} gallinas)
+                    </span>
+                  </span>
                   <span className="tabular-nums text-slate-600">
                     {fmtNumero(g.huevos_mes)} huevos · <strong>{g.pct_del_total}%</strong>
-                    {g.bajas_mes > 0 && (
-                      <span className="ml-2 text-rose-600">· {fmtNumero(g.bajas_mes)} bajas ({g.pct_bajas}%)</span>
+                    {g.bajas_gallinas_mes > 0 && (
+                      <span className="ml-2 text-rose-600">· {fmtNumero(g.bajas_gallinas_mes)} baja(s) mes</span>
                     )}
-                    {g.gallinas > 0 && (
+                    {g.gallinas_activas > 0 && (
                       <span className={`ml-2 ${colorPct(g.puesta_pct_7d)}`}>({g.puesta_pct_7d}% puesta)</span>
                     )}
                   </span>
@@ -158,7 +160,7 @@ export default function GranjaKpisPanel() {
           </div>
         )}
         <p className="mt-3 text-[10px] text-slate-400">
-          <strong>% puesta</strong>: huevos últimos 7 días ÷ (gallinas × 7). Rango sano: 85-95%.
+          <strong>Gallinas activas</strong> = inicial − bajas históricas. <strong>% puesta</strong> = huevos últimos 7 días ÷ (gallinas activas × 7). Rango sano: 85-95%.
         </p>
       </div>
     </section>

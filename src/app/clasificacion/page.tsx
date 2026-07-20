@@ -473,7 +473,7 @@ function ModalClasificacion({
   const [error, setError] = useState<string | null>(null);
 
   const totalClasificado = Object.values(cantidades).reduce((s, n) => s + (n || 0), 0);
-  const porClasificar = clasificacion.cantidad_huevos - clasificacion.bajas - totalClasificado;
+  const porClasificar = clasificacion.cantidad_huevos - totalClasificado;
 
   async function guardar() {
     setError(null);
@@ -511,7 +511,7 @@ function ModalClasificacion({
           <ReadonlyField label="Fecha" value={fmtFechaHora(clasificacion.fecha)} />
           <ReadonlyField
             label="Huevos a clasificar"
-            value={fmtNumero(clasificacion.cantidad_huevos - clasificacion.bajas)}
+            value={fmtNumero(clasificacion.cantidad_huevos)}
             align="right"
           />
           <ReadonlyField
@@ -522,8 +522,9 @@ function ModalClasificacion({
           />
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
-          Se recolectaron <strong>{fmtNumero(clasificacion.cantidad_huevos)}</strong> huevos, de los cuales <strong>{clasificacion.bajas}</strong> quedaron como bajas (rotos/descartados).
-          Quedan <strong>{fmtNumero(clasificacion.cantidad_huevos - clasificacion.bajas)}</strong> para clasificar por tipo. <strong>Por clasificar</strong> tiene que llegar a 0 para registrar.
+          Se recolectaron <strong>{fmtNumero(clasificacion.cantidad_huevos)}</strong> huevos para clasificar por tipo.
+          {clasificacion.bajas > 0 && <> Ese día también hubo <strong>{clasificacion.bajas}</strong> baja(s) de gallinas (no afecta la cuenta de huevos).</>}
+          {" "}<strong>Por clasificar</strong> tiene que llegar a 0 para registrar.
         </p>
 
         <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">

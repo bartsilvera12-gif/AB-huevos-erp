@@ -173,7 +173,8 @@ export async function PATCH(
         .maybeSingle();
       if (prodInfo.error) throw new Error(prodInfo.error.message);
       const prodData = prodInfo.data as { cantidad_huevos: number; bajas: number } | null;
-      const disponible = prodData ? (prodData.cantidad_huevos - prodData.bajas) : 0;
+      // Bajas son de gallinas (mortalidad), no de huevos — no restar
+      const disponible = prodData ? prodData.cantidad_huevos : 0;
       const totalCant = nuevoDetalle.reduce((s, d) => s + Number(d.cantidad || 0), 0);
       if (totalCant > disponible) {
         return NextResponse.json(errorResponse(`El total clasificado (${totalCant}) supera los huevos disponibles (${disponible}) de la producción.`), { status: 400 });

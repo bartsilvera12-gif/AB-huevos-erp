@@ -193,7 +193,7 @@ export default function ProduccionPage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard label="Registros de producción" value={String(producciones.length)} icon={<Layers className="h-5 w-5" />} tone="slate" />
         <KpiCard label="Total huevos" value={fmtNumero(totalHuevos)} icon={<Egg className="h-5 w-5" />} tone="sky" />
-        <KpiCard label="Total bajas" value={fmtNumero(totalBajas)} icon={<TrendingDown className="h-5 w-5" />} tone="rose" />
+        <KpiCard label="Bajas de gallinas" value={fmtNumero(totalBajas)} icon={<TrendingDown className="h-5 w-5" />} tone="rose" />
       </div>
 
       {errorCarga && (
@@ -458,7 +458,7 @@ function ModalProduccion({
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Bajas</label>
+              <label className="text-xs font-medium text-slate-600">Bajas de gallinas</label>
               <input
                 type="number"
                 min={0}
@@ -467,6 +467,7 @@ function ModalProduccion({
                 placeholder="0"
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
               />
+              <p className="mt-1 text-[10px] text-slate-400">Gallinas muertas ese día (no huevos).</p>
             </div>
           </div>
 
