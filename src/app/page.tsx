@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 // que vive en este mismo archivo queda intacto.
 import MobileDashboard from "@/app/_components/MobileDashboard";
 import CobranzasResumenCards from "@/components/cobros/CobranzasResumenCards";
+import GranjaKpisPanel from "@/components/granja/GranjaKpisPanel";
 import { getConfig } from "@/lib/config/storage";
 import { getUsuarios } from "@/lib/usuarios/storage";
 import type { ConfigGlobal } from "@/lib/config/types";
@@ -2310,10 +2311,13 @@ export default function DashboardPage() {
       )}
 
       {tab === "inventario" && (
-        <DashInventario
-          productos={productos}
-          compras={compras}
-        />
+        <div className="space-y-6">
+          <GranjaKpisPanel />
+          <DashInventario
+            productos={productos}
+            compras={compras}
+          />
+        </div>
       )}
 
       {tab === "ventas" && (
