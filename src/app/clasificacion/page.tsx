@@ -147,15 +147,73 @@ export default function ClasificacionPage() {
     }
   }
 
+  /**
+   * Fila unificada: incluye producciones pendientes de clasificar + las ya clasificadas.
+   * Las pendientes tienen `pendiente=true` y sin detalle/fechas distribución.
+   */
+  type FilaUnificada = {
+    key: string;
+    codigo: number;
+    galpon: string;
+    fecha: string;
+    cantidad_huevos: number;
+    bajas: number;
+    responsable: string;
+    fecha_distribucion: string | null;
+    resp_distribucion: string;
+    stock_aplicado: boolean;
+    pendiente: boolean;
+    clasificacion: Clasificacion | null;
+    produccion_id: string;
+  };
+  const filas = useMemo<FilaUnificada[]>(() => {
+    const pendientes: FilaUnificada[] = produccionesSinClasificar.map((p) => ({
+      key: `prod-${p.id}`,
+      codigo: p.codigo,
+      galpon: p.galpon,
+      fecha: p.fecha,
+      cantidad_huevos: p.cantidad_huevos,
+      bajas: p.bajas,
+      responsable: p.responsable,
+      fecha_distribucion: null,
+      resp_distribucion: "",
+      stock_aplicado: false,
+      pendiente: true,
+      clasificacion: null,
+      produccion_id: p.id,
+    }));
+    const clasificadas: FilaUnificada[] = clasificaciones.map((c) => ({
+      key: `clas-${c.id}`,
+      codigo: c.codigo,
+      galpon: c.galpon,
+      fecha: c.fecha,
+      cantidad_huevos: c.cantidad_huevos,
+      bajas: c.bajas,
+      responsable: c.responsable,
+      fecha_distribucion: c.fecha_distribucion,
+      resp_distribucion: c.resp_distribucion,
+      stock_aplicado: c.stock_aplicado,
+      pendiente: false,
+      clasificacion: c,
+      produccion_id: c.produccion_id,
+    }));
+    const todas = [...pendientes, ...clasificadas].sort((a, b) => {
+      const ta = new Date(a.fecha).getTime();
+      const tb = new Date(b.fecha).getTime();
+      return tb - ta;
+    });
+    return todas;
+  }, [produccionesSinClasificar, clasificaciones]);
+
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return clasificaciones;
-    return clasificaciones.filter((c) =>
+    if (!q) return filas;
+    return filas.filter((c) =>
       c.galpon.toLowerCase().includes(q) ||
       c.responsable.toLowerCase().includes(q) ||
       c.fecha.includes(q)
     );
-  }, [clasificaciones, busqueda]);
+  }, [filas, busqueda]);
 
   const totalHuevos = clasificaciones.reduce((s, c) => s + c.cantidad_huevos, 0);
 
@@ -221,7 +279,7 @@ export default function ClasificacionPage() {
             placeholder="Buscar por galpón, fecha o responsable…"
             className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#0EA5E9] sm:max-w-md"
           />
-          <span className="ml-auto text-xs text-slate-500">{filtradas.length} de {clasificaciones.length} registros</span>
+          <span className="ml-auto text-xs text-slate-500">{filtradas.length} de {filas.length} registros ({produccionesSinClasificar.length} pendientes)</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[960px] text-sm">
@@ -244,67 +302,90 @@ export default function ClasificacionPage() {
               ) : filtradas.length === 0 ? (
                 <tr><td colSpan={9} className="px-5 py-10 text-center text-sm text-slate-400">Sin registros que coincidan.</td></tr>
               ) : (
-                filtradas.map((c) => {
-                  const abierto = expandidos.has(c.id);
+                filtradas.map((f) => {
+                  const abierto = expandidos.has(f.key);
+                  const c = f.clasificacion;
                   return (
-                  <Fragment key={c.id}>
-                  <tr className="border-b border-slate-100 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors">
+                  <Fragment key={f.key}>
+                  <tr className={`border-b border-slate-100 last:border-0 transition-colors ${f.pendiente ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-[#4FAEB2]/[0.04]"}`}>
                     <td className="px-5 py-4 font-mono text-xs text-slate-500">
-                      <button
-                        type="button"
-                        onClick={() => setExpandidos((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
-                          return next;
-                        })}
-                        className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded border border-slate-200 hover:bg-slate-100 text-slate-500"
-                        title={abierto ? "Ocultar detalle" : "Ver detalle por tipo"}
-                      >{abierto ? "▾" : "▸"}</button>
-                      {c.codigo}
+                      {!f.pendiente && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandidos((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(f.key)) next.delete(f.key); else next.add(f.key);
+                            return next;
+                          })}
+                          className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded border border-slate-200 hover:bg-slate-100 text-slate-500"
+                          title={abierto ? "Ocultar detalle" : "Ver detalle por tipo"}
+                        >{abierto ? "▾" : "▸"}</button>
+                      )}
+                      {f.codigo}
                     </td>
-                    <td className="px-5 py-4 font-semibold text-slate-800">{c.galpon}</td>
-                    <td className="px-5 py-4 text-slate-700 tabular-nums">{fmtFechaHora(c.fecha)}</td>
-                    <td className="px-5 py-4 text-right tabular-nums font-medium text-slate-800">{fmtNumero(c.cantidad_huevos)}</td>
-                    <td className="px-5 py-4 text-right tabular-nums text-slate-700">{c.bajas}</td>
-                    <td className="px-5 py-4 text-slate-700">{c.responsable}</td>
-                    <td className="px-5 py-4 text-slate-700 tabular-nums text-xs">{fmtFechaHora(c.fecha_distribucion)}</td>
-                    <td className="px-5 py-4 text-slate-700">{c.resp_distribucion || "—"}</td>
+                    <td className="px-5 py-4 font-semibold text-slate-800">{f.galpon}</td>
+                    <td className="px-5 py-4 text-slate-700 tabular-nums">{fmtFechaHora(f.fecha)}</td>
+                    <td className="px-5 py-4 text-right tabular-nums font-medium text-slate-800">{fmtNumero(f.cantidad_huevos)}</td>
+                    <td className="px-5 py-4 text-right tabular-nums text-slate-700">{f.bajas}</td>
+                    <td className="px-5 py-4 text-slate-700">{f.responsable}</td>
+                    <td className="px-5 py-4 text-slate-700 tabular-nums text-xs">{fmtFechaHora(f.fecha_distribucion)}</td>
+                    <td className="px-5 py-4 text-slate-700">{f.resp_distribucion || "—"}</td>
                     <td className="px-5 py-4 text-right">
                       <div className="inline-flex items-center gap-1.5">
-                        {c.stock_aplicado && (
-                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Aplicada</span>
+                        {f.pendiente ? (
+                          <>
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">Pendiente</span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                // Crear cabecera y abrir el modal para clasificar
+                                const r = await crearCabecera(f.produccion_id, "", null);
+                                if (r.ok && r.clasificacion) setEditando(r.clasificacion);
+                                else alert(r.error ?? "Error al iniciar clasificación");
+                              }}
+                              className="inline-flex items-center justify-center rounded-md bg-[#4FAEB2] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#3F8E91] transition-colors"
+                            >
+                              Clasificar
+                            </button>
+                          </>
+                        ) : c && (
+                          <>
+                            {f.stock_aplicado && (
+                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Aplicada</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setEditando(c)}
+                              className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+                            >
+                              {f.stock_aplicado ? "Editar" : "Clasificar"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const msg = f.stock_aplicado
+                                  ? `¿Borrar la clasificación #${f.codigo}? Esto REVIERTE el stock: se van a restar las planchas del inventario.`
+                                  : `¿Borrar la clasificación #${f.codigo}?`;
+                                if (!confirm(msg)) return;
+                                try {
+                                  const r = await fetch(`/api/granja/clasificaciones/${c.id}`, { method: "DELETE" });
+                                  const j = await r.json();
+                                  if (!r.ok) throw new Error(j?.error?.message ?? j?.error ?? "Error al borrar");
+                                  await cargarTodo();
+                                } catch (e) {
+                                  alert(e instanceof Error ? e.message : "Error");
+                                }
+                              }}
+                              className="inline-flex items-center justify-center rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 transition-colors"
+                            >
+                              Borrar
+                            </button>
+                          </>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setEditando(c)}
-                          className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
-                        >
-                          {c.stock_aplicado ? "Editar" : "Clasificar"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const msg = c.stock_aplicado
-                              ? `¿Borrar la clasificación #${c.codigo}? Esto REVIERTE el stock: se van a restar las planchas del inventario.`
-                              : `¿Borrar la clasificación #${c.codigo}?`;
-                            if (!confirm(msg)) return;
-                            try {
-                              const r = await fetch(`/api/granja/clasificaciones/${c.id}`, { method: "DELETE" });
-                              const j = await r.json();
-                              if (!r.ok) throw new Error(j?.error?.message ?? j?.error ?? "Error al borrar");
-                              await cargarTodo();
-                            } catch (e) {
-                              alert(e instanceof Error ? e.message : "Error");
-                            }
-                          }}
-                          className="inline-flex items-center justify-center rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 transition-colors"
-                        >
-                          Borrar
-                        </button>
                       </div>
                     </td>
                   </tr>
-                  {abierto && (
+                  {abierto && c && (
                     <tr className="bg-slate-50/60">
                       <td colSpan={9} className="px-8 py-3">
                         {c.detalle.length === 0 ? (
