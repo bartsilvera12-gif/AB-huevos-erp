@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
         .gte("fecha", inicioMes.toISOString()),
       supabase
         .from("granja_producciones")
-        .select("cantidad_huevos, bajas")
+        .select("cantidad_huevos")
         .eq("empresa_id", auth.empresa_id)
         .eq("clasificada", false),
       // Todas las bajas históricas para calcular gallinas activas por galpón
@@ -100,9 +100,9 @@ export async function GET(request: NextRequest) {
       };
     }).sort((a, b) => b.huevos_mes - a.huevos_mes);
 
-    // Sin clasificar
-    const sinClas = (sinClasQ.data ?? []) as Array<{ cantidad_huevos: number; bajas: number }>;
-    const huevosSinClasificar = sinClas.reduce((s, p) => s + Math.max(0, (p.cantidad_huevos ?? 0) - (p.bajas ?? 0)), 0);
+    // Sin clasificar — bajas son gallinas (mortalidad), no se restan de huevos
+    const sinClas = (sinClasQ.data ?? []) as Array<{ cantidad_huevos: number }>;
+    const huevosSinClasificar = sinClas.reduce((s, p) => s + (p.cantidad_huevos ?? 0), 0);
     const produccionesSinClasificar = sinClas.length;
 
     const totalInicial = galpones.reduce((s, g) => s + (g.inicial_gallinas ?? 0), 0);
