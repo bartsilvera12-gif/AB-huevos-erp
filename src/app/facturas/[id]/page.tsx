@@ -177,25 +177,6 @@ function FacturaDetalleInner() {
             </Link>
           </p>
         </div>
-        <div className="flex gap-2 print:hidden">
-          <a
-            href={`/api/facturas/${factura.id}/sifen/kude`}
-            target="_blank"
-            rel="noopener"
-            className="text-xs font-semibold px-3 py-2 rounded-lg bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] text-white shadow-sm hover:shadow-md"
-            title="Descargar KuDE oficial SIFEN (PDF)"
-          >
-            📄 Factura (KuDE)
-          </a>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
-            title="Imprimir vista actual (no oficial)"
-          >
-            Imprimir
-          </button>
-        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 space-y-3">
@@ -249,6 +230,18 @@ function FacturaDetalleInner() {
         onResumenLoaded={onResumenLoaded}
         onComercialUpdated={reloadFacturaComercial}
       />
+
+      <div className="flex justify-center print:hidden">
+        <a
+          href={`/api/facturas/${factura.id}/sifen/kude`}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-6 py-3 text-sm font-semibold text-white shadow-md hover:shadow-lg active:scale-[.98]"
+          title="Descargar KuDE oficial SIFEN (PDF)"
+        >
+          📄 Descargar factura (KuDE PDF)
+        </a>
+      </div>
     </div>
   );
 }
