@@ -677,14 +677,14 @@ export async function createVentaTransaccionalPg(
 
         const cliQ = await sb
           .from("clientes")
-          .select("ruc, documento, razon_social, empresa, nombre")
+          .select("ruc, documento, empresa, nombre")
           .eq("empresa_id", params.empresaId)
           .eq("id", params.clienteId)
           .maybeSingle();
         if (cliQ.error) throw new Error(`Cliente snapshot: ${cliQ.error.message}`);
-        const cli = (cliQ.data ?? {}) as { ruc?: string | null; documento?: string | null; razon_social?: string | null; empresa?: string | null; nombre?: string | null };
+        const cli = (cliQ.data ?? {}) as { ruc?: string | null; documento?: string | null; empresa?: string | null; nombre?: string | null };
         const clienteRuc = (cli.ruc ?? cli.documento ?? "").trim() || null;
-        const clienteRazonSocial = (cli.razon_social ?? cli.empresa ?? cli.nombre ?? "").trim() || null;
+        const clienteRazonSocial = (cli.empresa ?? cli.nombre ?? "").trim() || null;
         console.log("[bridge] cliente snapshot", { clienteRuc, clienteRazonSocial });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
