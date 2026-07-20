@@ -254,7 +254,7 @@ export default function ClasificacionPage() {
                     <td className="px-5 py-4 text-slate-700 tabular-nums text-xs">{fmtFechaHora(c.fecha_distribucion)}</td>
                     <td className="px-5 py-4 text-slate-700">{c.resp_distribucion || "—"}</td>
                     <td className="px-5 py-4 text-right">
-                      <div className="inline-flex items-center gap-2">
+                      <div className="inline-flex items-center gap-1.5">
                         {c.stock_aplicado && (
                           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Aplicada</span>
                         )}
@@ -263,7 +263,27 @@ export default function ClasificacionPage() {
                           onClick={() => setEditando(c)}
                           className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
                         >
-                          {c.stock_aplicado ? "Ver" : "Clasificar"}
+                          {c.stock_aplicado ? "Editar" : "Clasificar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const msg = c.stock_aplicado
+                              ? `¿Borrar la clasificación #${c.codigo}? Esto REVIERTE el stock: se van a restar las planchas del inventario.`
+                              : `¿Borrar la clasificación #${c.codigo}?`;
+                            if (!confirm(msg)) return;
+                            try {
+                              const r = await fetch(`/api/granja/clasificaciones/${c.id}`, { method: "DELETE" });
+                              const j = await r.json();
+                              if (!r.ok) throw new Error(j?.error?.message ?? j?.error ?? "Error al borrar");
+                              await cargarTodo();
+                            } catch (e) {
+                              alert(e instanceof Error ? e.message : "Error");
+                            }
+                          }}
+                          className="inline-flex items-center justify-center rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 transition-colors"
+                        >
+                          Borrar
                         </button>
                       </div>
                     </td>
@@ -531,9 +551,8 @@ function ModalClasificacion({
                         min={0}
                         value={cant === 0 ? "" : cant}
                         placeholder="0"
-                        readOnly={clasificacion.stock_aplicado}
                         onChange={(e) => setCantidades((prev) => ({ ...prev, [t.id]: Number(e.target.value) || 0 }))}
-                        className={`w-full rounded-md border px-2 py-1 text-right text-sm outline-none ${clasificacion.stock_aplicado ? "border-slate-200 bg-slate-50 text-slate-600" : "border-slate-300 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"}`}
+                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-right text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                       />
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{planchas}</td>
@@ -555,26 +574,24 @@ function ModalClasificacion({
         </p>
 
         {clasificacion.stock_aplicado && (
-          <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-            Esta clasificación ya fue aplicada al inventario. El detalle es solo lectura.
+          <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Esta clasificación ya fue aplicada al inventario. Si guardás cambios, el stock se ajusta automáticamente (delta entre el detalle anterior y el nuevo).
           </div>
         )}
         {error && <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
 
         <div className="mt-5 flex items-center justify-end gap-2">
           <button type="button" onClick={onClose} disabled={guardando} className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60">
-            {clasificacion.stock_aplicado ? "Cerrar" : "Cancelar"}
+            Cancelar
           </button>
-          {!clasificacion.stock_aplicado && (
-            <button
-              type="button"
-              onClick={guardar}
-              disabled={guardando || tipos.length === 0}
-              className="rounded-md bg-[#22c55e] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a] disabled:opacity-60"
-            >
-              {guardando ? "Guardando…" : "Registrar y aplicar a inventario"}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={guardando || tipos.length === 0}
+            className="rounded-md bg-[#22c55e] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#16a34a] disabled:opacity-60"
+          >
+            {guardando ? "Guardando…" : clasificacion.stock_aplicado ? "Guardar cambios y ajustar inventario" : "Registrar y aplicar a inventario"}
+          </button>
         </div>
       </div>
     </div>

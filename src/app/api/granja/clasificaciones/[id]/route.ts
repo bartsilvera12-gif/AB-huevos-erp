@@ -146,13 +146,24 @@ export async function PATCH(
       if (upd.error) return NextResponse.json(errorResponse(upd.error.message), { status: 400 });
     }
 
-    // Detalle + inventario
+    // Detalle + inventario — soporta primera vez y re-edición (aplica delta)
     let planchasGeneradas: Array<{ tipo_huevo_id: string; planchas: number }> = [];
     if (Array.isArray(body.detalle)) {
-      if (clas.stock_aplicado) {
-        return NextResponse.json(errorResponse("Ya aplicada al inventario, no se puede modificar el detalle."), { status: 409 });
-      }
       const nuevoDetalle = body.detalle.filter((d) => d && d.tipo_huevo_id && Number(d.cantidad) > 0);
+
+      // Detalle anterior (para calcular delta si es re-edición)
+      const oldDetQ = await supabase
+        .from("granja_clasificacion_detalle")
+        .select("tipo_huevo_id, cantidad")
+        .eq("clasificacion_id", id);
+      if (oldDetQ.error) throw new Error(oldDetQ.error.message);
+      const oldDet = (oldDetQ.data ?? []) as Array<{ tipo_huevo_id: string; cantidad: number }>;
+      const oldDirect: Record<string, number> = {};
+      const oldSobrantes: Record<string, number> = {};
+      for (const d of oldDet) {
+        oldDirect[d.tipo_huevo_id] = (oldDirect[d.tipo_huevo_id] ?? 0) + Math.floor(d.cantidad / HUEVOS_POR_PLANCHA);
+        oldSobrantes[d.tipo_huevo_id] = (oldSobrantes[d.tipo_huevo_id] ?? 0) + (d.cantidad % HUEVOS_POR_PLANCHA);
+      }
 
       // Validar que el total clasificado no supere (cantidad_huevos - bajas) de la producción
       const prodInfo = await supabase
@@ -203,34 +214,61 @@ export async function PATCH(
         if (ins.error) throw new Error(ins.error.message);
       }
 
-      // Sobrantes al acumulador (delta positivo)
-      const sumarSobrantes: Record<string, number> = {};
+      // Nuevos directs + sobrantes por tipo
+      const newDirect: Record<string, number> = {};
+      const newSobrantes: Record<string, number> = {};
       for (const d of nuevoDetalle) {
         const n = Math.max(0, Math.trunc(Number(d.cantidad)));
-        const s = n % HUEVOS_POR_PLANCHA;
-        if (s > 0) sumarSobrantes[d.tipo_huevo_id] = (sumarSobrantes[d.tipo_huevo_id] ?? 0) + s;
+        newDirect[d.tipo_huevo_id] = (newDirect[d.tipo_huevo_id] ?? 0) + Math.floor(n / HUEVOS_POR_PLANCHA);
+        newSobrantes[d.tipo_huevo_id] = (newSobrantes[d.tipo_huevo_id] ?? 0) + (n % HUEVOS_POR_PLANCHA);
       }
-      planchasGeneradas = await aplicarDeltaSueltos(supabase, auth.empresa_id, sumarSobrantes);
 
-      // Total planchas por tipo (directas + overflow) → mover stock
-      const totalPorTipo: Record<string, number> = {};
-      for (const d of nuevoDetalle) {
-        const n = Math.max(0, Math.trunc(Number(d.cantidad)));
-        totalPorTipo[d.tipo_huevo_id] = (totalPorTipo[d.tipo_huevo_id] ?? 0) + Math.floor(n / HUEVOS_POR_PLANCHA);
+      // Delta sobrantes = new - old, aplicado al acumulador (puede generar overflow)
+      const deltaSobrantes: Record<string, number> = {};
+      const todosTipos = new Set([...Object.keys(newSobrantes), ...Object.keys(oldSobrantes)]);
+      for (const tipoId of todosTipos) {
+        const delta = (newSobrantes[tipoId] ?? 0) - (oldSobrantes[tipoId] ?? 0);
+        if (delta !== 0) deltaSobrantes[tipoId] = delta;
+      }
+      planchasGeneradas = await aplicarDeltaSueltos(supabase, auth.empresa_id, deltaSobrantes);
+
+      // Delta stock = (new_direct - old_direct) + overflow_planchas
+      const stockDelta: Record<string, number> = {};
+      const tiposStock = new Set([...Object.keys(newDirect), ...Object.keys(oldDirect)]);
+      for (const tipoId of tiposStock) {
+        stockDelta[tipoId] = (newDirect[tipoId] ?? 0) - (oldDirect[tipoId] ?? 0);
       }
       for (const p of planchasGeneradas) {
-        totalPorTipo[p.tipo_huevo_id] = (totalPorTipo[p.tipo_huevo_id] ?? 0) + p.planchas;
+        stockDelta[p.tipo_huevo_id] = (stockDelta[p.tipo_huevo_id] ?? 0) + p.planchas;
       }
 
-      // Traer codigo de la produccion para la referencia
+      // Necesitamos nombres de TODOS los tipos afectados (nuevos y viejos)
+      const tiposParaMover = Array.from(new Set([...Object.keys(stockDelta), ...oldDet.map((d) => d.tipo_huevo_id)]));
+      const faltantes = tiposParaMover.filter((t) => !tiposInfo.has(t));
+      if (faltantes.length > 0) {
+        const extraQ = await supabase
+          .from("granja_tipos_huevo")
+          .select("id, nombre, producto_id")
+          .eq("empresa_id", auth.empresa_id)
+          .in("id", faltantes);
+        if (extraQ.error) throw new Error(extraQ.error.message);
+        for (const t of (extraQ.data ?? []) as Array<{ id: string; nombre: string; producto_id: string | null }>) {
+          tiposInfo.set(t.id, { nombre: t.nombre, producto_id: t.producto_id });
+        }
+      }
+
       const prodQ = await supabase
         .from("granja_producciones").select("codigo").eq("id", clas.produccion_id).maybeSingle();
       const codigo = (prodQ.data as { codigo?: number } | null)?.codigo ?? 0;
-      const referencia = `CLAS-${codigo}`;
-      for (const [tipoId, planchas] of Object.entries(totalPorTipo)) {
+      const refBase = `CLAS-${codigo}`;
+      for (const [tipoId, delta] of Object.entries(stockDelta)) {
+        if (delta === 0) continue;
         const info = tiposInfo.get(tipoId);
         if (!info) continue;
-        await moverStockPorTipo(supabase, auth.empresa_id, tipoId, info.nombre, planchas, "ENTRADA", referencia);
+        const abs = Math.abs(delta);
+        const mov = delta > 0 ? "ENTRADA" : "SALIDA";
+        const ref = delta > 0 ? refBase : `${refBase}-AJ`;
+        await moverStockPorTipo(supabase, auth.empresa_id, tipoId, info.nombre, abs, mov, ref);
       }
 
       const marcar = await supabase
