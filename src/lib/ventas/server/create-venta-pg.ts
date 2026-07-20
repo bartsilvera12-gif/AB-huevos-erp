@@ -692,6 +692,14 @@ export async function createVentaTransaccionalPg(
         console.log("[bridge] numero_factura siguiente", numeroFactura);
 
         const fechaSolo = fechaIso.slice(0, 10);
+        const tipoFactura = params.tipoVenta === "CREDITO" ? "credito" : "contado";
+        // Fecha vencimiento: si crédito y plazo → fecha + plazo, si no → misma fecha
+        let fechaVencFactura = fechaSolo;
+        if (params.tipoVenta === "CREDITO" && params.plazoDias && params.plazoDias > 0) {
+          const d = new Date(fechaSolo);
+          d.setDate(d.getDate() + params.plazoDias);
+          fechaVencFactura = d.toISOString().slice(0, 10);
+        }
         const insFac = await sb
           .from("facturas")
           .insert({
@@ -699,12 +707,12 @@ export async function createVentaTransaccionalPg(
             cliente_id: params.clienteId,
             numero_factura: numeroFactura,
             estado: "Pendiente",
-            tipo: "venta",
+            tipo: tipoFactura,
             moneda: params.moneda === "USD" ? "USD" : "GS",
             monto: calc.total,
             saldo: calc.total,
             fecha: fechaSolo,
-            fecha_vencimiento: fechaSolo,
+            fecha_vencimiento: fechaVencFactura,
             origen_venta_id: ventaId,
             cliente_razon_social: clienteRazonSocial,
             cliente_ruc: clienteRuc,
