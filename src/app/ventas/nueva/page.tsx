@@ -715,11 +715,13 @@ export default function NuevaVentaPage() {
       // segunda pestaña puede ser bloqueada por el navegador → fallback con botones).
       try { window.open(ticketUrl, "_blank", "noopener"); } catch {}
       if (generaNota) { try { window.open(remisionUrl, "_blank", "noopener"); } catch {} }
-      // Si además se generó factura electrónica, abrir el detalle para firmar/enviar.
+      // Si además se generó factura electrónica, redirigir a su detalle en la misma
+      // pestaña (evita el pop-up blocker de Chrome que bloquea la 2da ventana).
       if (resultado.factura_id) {
-        try { window.open(`/facturas/${resultado.factura_id}`, "_blank", "noopener"); } catch {}
-      } else if (resultado.factura_error) {
-        // Bridge falló: mostrar el error al usuario. La venta sí quedó registrada.
+        router.push(`/facturas/${resultado.factura_id}`);
+        return;
+      }
+      if (resultado.factura_error) {
         alert(`La venta se registró (ticket), pero NO se pudo generar la factura electrónica:\n\n${resultado.factura_error}\n\nRevisá los datos del cliente / configuración SIFEN.`);
       }
       // Redirección directa a /ventas — el ticket ya se abrió en nueva pestaña.
