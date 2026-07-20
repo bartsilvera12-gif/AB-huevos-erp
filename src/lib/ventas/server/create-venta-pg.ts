@@ -70,6 +70,8 @@ export interface CreateVentaPgParams {
   permitirSinStock?: boolean;
   /** Si true y hay cliente, la venta emite nota de remisión (documento NO fiscal) con número NR-XXXXXX. */
   generaNotaRemision?: boolean;
+  /** Tipo de documento fiscal: 'ticket' (default) o 'factura' (electrónica, requiere cliente). */
+  tipoDocumento?: "ticket" | "factura";
 }
 
 function recalcTotals(items: CreateVentaItemInput[]) {
@@ -382,7 +384,7 @@ export async function createVentaTransaccionalPg(
   }
 
   // 5) Insertar venta
-  const insVenta = await sb
+  let insVenta = await sb
     .from("ventas")
     .insert({
       empresa_id: params.empresaId,
@@ -399,12 +401,43 @@ export async function createVentaTransaccionalPg(
       metodo_pago: params.metodoPago,
       genera_nota_remision: generaNota,
       nota_remision_numero: notaRemisionNumero,
+      tipo_documento: params.tipoDocumento === "factura" ? "factura" : "ticket",
       fecha: fechaIso,
       observaciones: observacionesFinal,
     })
     .select("id")
     .single();
-  if (insVenta.error) throw new Error(insVenta.error.message);
+  if (insVenta.error) {
+    // Fallback si la columna tipo_documento aún no existe en DB — reintenta sin ese campo.
+    if (/tipo_documento/i.test(insVenta.error.message)) {
+      const retry = await sb
+        .from("ventas")
+        .insert({
+          empresa_id: params.empresaId,
+          cliente_id: params.clienteId,
+          numero_control: numeroControl,
+          moneda: params.moneda,
+          tipo_cambio: params.tipoCambio,
+          subtotal: calc.subtotal,
+          monto_iva: calc.montoIva,
+          total: calc.total,
+          estado: "completada",
+          tipo_venta: params.tipoVenta,
+          plazo_dias: params.plazoDias,
+          metodo_pago: params.metodoPago,
+          genera_nota_remision: generaNota,
+          nota_remision_numero: notaRemisionNumero,
+          fecha: fechaIso,
+          observaciones: observacionesFinal,
+        })
+        .select("id")
+        .single();
+      if (retry.error) throw new Error(retry.error.message);
+      insVenta = retry;
+    } else {
+      throw new Error(insVenta.error.message);
+    }
+  }
   const ventaId = String((insVenta.data as { id: string }).id);
 
   // Helper de rollback best-effort

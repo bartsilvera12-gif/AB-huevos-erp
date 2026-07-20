@@ -135,6 +135,10 @@ export async function POST(request: NextRequest) {
       clienteRaw === null || clienteRaw === undefined || clienteRaw === ""
         ? null
         : String(clienteRaw);
+    const tipoDocumento: "ticket" | "factura" = o.tipo_documento === "factura" ? "factura" : "ticket";
+    if (tipoDocumento === "factura" && !clienteId) {
+      return NextResponse.json(errorResponse("Para emitir factura electrónica es obligatorio seleccionar un cliente."), { status: 400 });
+    }
     const observaciones =
       o.observaciones === null || o.observaciones === undefined
         ? null
@@ -213,6 +217,24 @@ export async function POST(request: NextRequest) {
 
     // Anti doble facturación: si se factura un pedido, verificar que aún no tenga venta.
     // (Se valida ANTES de crear la venta para no descontar stock por un pedido ya facturado.)
+    // Validar cliente cuando es factura electrónica
+    if (tipoDocumento === "factura" && clienteId) {
+      const sbTenant = createServiceRoleClientWithDbSchema(schema);
+      const cliQ = await sbTenant
+        .from("clientes")
+        .select("ruc, documento")
+        .eq("empresa_id", auth.empresa_id)
+        .eq("id", clienteId)
+        .maybeSingle();
+      if (cliQ.error || !cliQ.data) {
+        return NextResponse.json(errorResponse("Cliente no encontrado."), { status: 400 });
+      }
+      const cli = cliQ.data as { ruc: string | null; documento: string | null };
+      if (!cli.ruc && !cli.documento) {
+        return NextResponse.json(errorResponse("El cliente no tiene RUC ni cédula cargados. Editá el cliente antes de emitir la factura."), { status: 400 });
+      }
+    }
+
     const sbPedido = pedidoId ? createServiceRoleClientWithDbSchema(schema) : null;
     if (pedidoId && sbPedido) {
       const pq = await sbPedido
@@ -247,6 +269,7 @@ export async function POST(request: NextRequest) {
       pedidoCocina,
       permitirSinStock,
       generaNotaRemision: o.genera_nota_remision === true,
+      tipoDocumento,
     });
 
     // Vincular el pedido facturado con la venta creada (Caja). Trazabilidad:
