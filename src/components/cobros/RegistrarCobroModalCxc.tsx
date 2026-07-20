@@ -50,6 +50,33 @@ export function RegistrarCobroModalCxc({
   const [error, setError] = useState<string | null>(null);
   // Tras un cobro exitoso, se ofrece generar el recibo (paso opcional).
   const [cobroOk, setCobroOk] = useState<{ cobroId: string; monto: number } | null>(null);
+  // Mini form para crear entidad bancaria sin salir del modal
+  const [nuevaEntOpen, setNuevaEntOpen] = useState(false);
+  const [nuevaEntNombre, setNuevaEntNombre] = useState("");
+  const [nuevaEntTipo, setNuevaEntTipo] = useState<"banco" | "billetera" | "tarjeta" | "otro">("banco");
+  const [creandoEnt, setCreandoEnt] = useState(false);
+  const [errorEnt, setErrorEnt] = useState<string | null>(null);
+  async function crearEntidad() {
+    const n = nuevaEntNombre.trim();
+    if (!n) { setErrorEnt("Nombre obligatorio"); return; }
+    setCreandoEnt(true); setErrorEnt(null);
+    try {
+      const r = await fetchWithSupabaseSession("/api/entidades-bancarias", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nombre: n, tipo: nuevaEntTipo, activo: true }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error ?? "Error");
+      const nueva = j.data?.entidad as Entidad;
+      setEntidades((prev) => [...prev, nueva]);
+      setEntidadId(nueva.id);
+      setNuevaEntOpen(false);
+      setNuevaEntNombre("");
+    } catch (e) {
+      setErrorEnt(e instanceof Error ? e.message : "Error");
+    } finally { setCreandoEnt(false); }
+  }
 
   useEffect(() => {
     if (open && cuenta) {
@@ -176,10 +203,52 @@ export function RegistrarCobroModalCxc({
                   <label className="block text-xs font-medium text-gray-600 mb-1">
                     {metodo === "tarjeta" ? "Procesadora / Banco" : "Entidad bancaria"} *
                   </label>
-                  <select value={entidadId} onChange={(e) => setEntidadId(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white">
-                    <option value="">— Elegí —</option>
-                    {entidadesFiltradas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                  </select>
+                  <div className="flex gap-1.5">
+                    <select value={entidadId} onChange={(e) => setEntidadId(e.target.value)} className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm bg-white">
+                      <option value="">— Elegí —</option>
+                      {entidadesFiltradas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => { setNuevaEntOpen((v) => !v); setNuevaEntTipo(metodo === "tarjeta" ? "tarjeta" : metodo === "transferencia" ? "banco" : "billetera"); }}
+                      className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      title="Crear nueva entidad"
+                    >{nuevaEntOpen ? "×" : "+ Nueva"}</button>
+                  </div>
+                  {nuevaEntOpen && (
+                    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={nuevaEntNombre}
+                          onChange={(e) => setNuevaEntNombre(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") crearEntidad(); }}
+                          placeholder="Nombre (ej: Banco Itaú)"
+                          className="rounded-md border border-slate-300 px-2 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                        />
+                        <select
+                          value={nuevaEntTipo}
+                          onChange={(e) => setNuevaEntTipo(e.target.value as typeof nuevaEntTipo)}
+                          className="rounded-md border border-slate-300 px-2 py-1.5 text-xs bg-white"
+                        >
+                          <option value="banco">Banco</option>
+                          <option value="billetera">Billetera</option>
+                          <option value="tarjeta">Tarjeta / Procesadora</option>
+                          <option value="otro">Otro</option>
+                        </select>
+                      </div>
+                      {errorEnt && <p className="text-[11px] text-rose-700">{errorEnt}</p>}
+                      <button
+                        type="button"
+                        onClick={crearEntidad}
+                        disabled={creandoEnt || !nuevaEntNombre.trim()}
+                        className="w-full rounded-md bg-[#22c55e] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#16a34a] disabled:opacity-60"
+                      >
+                        {creandoEnt ? "Creando…" : "Guardar entidad"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               <div>
