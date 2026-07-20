@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
         .gte("fecha", hace7.toISOString()),
       supabase
         .from("granja_producciones")
-        .select("galpon_id, cantidad_huevos")
+        .select("galpon_id, cantidad_huevos, bajas")
         .eq("empresa_id", auth.empresa_id)
         .gte("fecha", inicioMes.toISOString()),
       supabase
@@ -57,17 +57,21 @@ export async function GET(request: NextRequest) {
     const puestaPct7 = totalGallinas > 0 ? Math.round((huevos7 / (totalGallinas * 7)) * 1000) / 10 : 0;
 
     // Por galpón mes actual
-    const prodsMes = (prodsMesQ.data ?? []) as Array<{ galpon_id: string; cantidad_huevos: number }>;
+    const prodsMes = (prodsMesQ.data ?? []) as Array<{ galpon_id: string; cantidad_huevos: number; bajas: number }>;
     const totalMes = prodsMes.reduce((s, p) => s + (p.cantidad_huevos ?? 0), 0);
+    const totalBajasMes = prodsMes.reduce((s, p) => s + (p.bajas ?? 0), 0);
     const porGalpon = galpones.map((g) => {
-      const huevos = prodsMes.filter((p) => p.galpon_id === g.id).reduce((s, p) => s + (p.cantidad_huevos ?? 0), 0);
+      const rowsMes = prodsMes.filter((p) => p.galpon_id === g.id);
+      const huevos = rowsMes.reduce((s, p) => s + (p.cantidad_huevos ?? 0), 0);
+      const bajas = rowsMes.reduce((s, p) => s + (p.bajas ?? 0), 0);
       const pct = totalMes > 0 ? Math.round((huevos / totalMes) * 1000) / 10 : 0;
+      const pctBajas = huevos > 0 ? Math.round((bajas / huevos) * 1000) / 10 : 0;
       const puestaGalpon = g.inicial_gallinas > 0
         ? Math.round((prods7
             .filter((p) => p.galpon_id === g.id)
             .reduce((s, p) => s + (p.cantidad_huevos ?? 0), 0) / (g.inicial_gallinas * 7)) * 1000) / 10
         : 0;
-      return { galpon_id: g.id, nombre: g.nombre, gallinas: g.inicial_gallinas ?? 0, huevos_mes: huevos, pct_del_total: pct, puesta_pct_7d: puestaGalpon };
+      return { galpon_id: g.id, nombre: g.nombre, gallinas: g.inicial_gallinas ?? 0, huevos_mes: huevos, bajas_mes: bajas, pct_bajas: pctBajas, pct_del_total: pct, puesta_pct_7d: puestaGalpon };
     }).sort((a, b) => b.huevos_mes - a.huevos_mes);
 
     // Sin clasificar
@@ -75,11 +79,15 @@ export async function GET(request: NextRequest) {
     const huevosSinClasificar = sinClas.reduce((s, p) => s + Math.max(0, (p.cantidad_huevos ?? 0) - (p.bajas ?? 0)), 0);
     const produccionesSinClasificar = sinClas.length;
 
+    const pctBajasTotal = totalMes > 0 ? Math.round((totalBajasMes / totalMes) * 1000) / 10 : 0;
+
     return NextResponse.json(successResponse({
       puesta_pct_7d: puestaPct7,
       huevos_ultimos_7d: huevos7,
       total_gallinas: totalGallinas,
       huevos_mes: totalMes,
+      bajas_mes: totalBajasMes,
+      pct_bajas_mes: pctBajasTotal,
       por_galpon: porGalpon,
       huevos_sin_clasificar: huevosSinClasificar,
       producciones_sin_clasificar: produccionesSinClasificar,

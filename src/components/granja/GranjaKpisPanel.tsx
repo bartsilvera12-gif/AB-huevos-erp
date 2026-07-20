@@ -9,11 +9,15 @@ type Data = {
   huevos_ultimos_7d: number;
   total_gallinas: number;
   huevos_mes: number;
+  bajas_mes: number;
+  pct_bajas_mes: number;
   por_galpon: Array<{
     galpon_id: string;
     nombre: string;
     gallinas: number;
     huevos_mes: number;
+    bajas_mes: number;
+    pct_bajas: number;
     pct_del_total: number;
     puesta_pct_7d: number;
   }>;
@@ -82,8 +86,8 @@ export default function GranjaKpisPanel() {
         </div>
       </div>
 
-      {/* 3 KPIs */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* 4 KPIs */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">% Puesta (últimos 7 días)</p>
           <p className={`mt-2 text-3xl font-bold tabular-nums leading-none ${puestaColor}`}>{data.puesta_pct_7d}%</p>
@@ -97,6 +101,14 @@ export default function GranjaKpisPanel() {
           <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-sky-700">{fmtNumero(data.huevos_mes)}</p>
           <p className="mt-2 text-[11px] text-slate-500">
             Repartidos en {data.por_galpon.filter((g) => g.huevos_mes > 0).length} galpones
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Bajas del mes</p>
+          <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-rose-700">{fmtNumero(data.bajas_mes)}</p>
+          <p className="mt-2 text-[11px] text-slate-500">
+            <strong>{data.pct_bajas_mes}%</strong> del total (huevos rotos / descartados)
           </p>
         </div>
 
@@ -127,6 +139,9 @@ export default function GranjaKpisPanel() {
                   <span className="font-medium text-slate-700">{g.nombre}</span>
                   <span className="tabular-nums text-slate-600">
                     {fmtNumero(g.huevos_mes)} huevos · <strong>{g.pct_del_total}%</strong>
+                    {g.bajas_mes > 0 && (
+                      <span className="ml-2 text-rose-600">· {fmtNumero(g.bajas_mes)} bajas ({g.pct_bajas}%)</span>
+                    )}
                     {g.gallinas > 0 && (
                       <span className={`ml-2 ${colorPct(g.puesta_pct_7d)}`}>({g.puesta_pct_7d}% puesta)</span>
                     )}
