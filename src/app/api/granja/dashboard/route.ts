@@ -20,7 +20,17 @@ export async function GET(request: NextRequest) {
     hace7.setDate(hoy.getDate() - 7);
     const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
-    const [galponesQ, prods7Q, prodsMesQ, sinClasQ, todasBajasQ] = await Promise.all([
+    // Detectar tipo "Roto" (o alguno que empiece con "Rot") para reportar huevos rotos clasificados
+    const tipoRotoQ = await supabase
+      .from("granja_tipos_huevo")
+      .select("id")
+      .eq("empresa_id", auth.empresa_id)
+      .ilike("nombre", "%roto%")
+      .limit(1)
+      .maybeSingle();
+    const tipoRotoId = (tipoRotoQ.data as { id?: string } | null)?.id ?? null;
+
+    const [galponesQ, prods7Q, prodsMesQ, sinClasQ, todasBajasQ, rotosMesQ, rotosTotQ] = await Promise.all([
       supabase
         .from("granja_galpones")
         .select("id, nombre, inicial_gallinas, activo")
@@ -46,6 +56,23 @@ export async function GET(request: NextRequest) {
         .from("granja_producciones")
         .select("galpon_id, bajas")
         .eq("empresa_id", auth.empresa_id),
+      // Huevos rotos clasificados: mes actual (via join a clasificaciones para filtrar por fecha)
+      tipoRotoId
+        ? supabase
+            .from("granja_clasificacion_detalle")
+            .select("cantidad, granja_clasificaciones!inner(created_at, empresa_id)")
+            .eq("tipo_huevo_id", tipoRotoId)
+            .eq("granja_clasificaciones.empresa_id", auth.empresa_id)
+            .gte("granja_clasificaciones.created_at", inicioMes.toISOString())
+        : Promise.resolve({ data: [], error: null }),
+      // Huevos rotos clasificados: histórico total
+      tipoRotoId
+        ? supabase
+            .from("granja_clasificacion_detalle")
+            .select("cantidad, granja_clasificaciones!inner(empresa_id)")
+            .eq("tipo_huevo_id", tipoRotoId)
+            .eq("granja_clasificaciones.empresa_id", auth.empresa_id)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (galponesQ.error) throw new Error(galponesQ.error.message);
@@ -105,6 +132,12 @@ export async function GET(request: NextRequest) {
     const huevosSinClasificar = sinClas.reduce((s, p) => s + (p.cantidad_huevos ?? 0), 0);
     const produccionesSinClasificar = sinClas.length;
 
+    // Huevos rotos (por si algún query se rompió, tratamos como 0)
+    const rotosMesRows = (rotosMesQ && !("error" in rotosMesQ && rotosMesQ.error) ? (rotosMesQ.data ?? []) : []) as Array<{ cantidad: number }>;
+    const rotosTotRows = (rotosTotQ && !("error" in rotosTotQ && rotosTotQ.error) ? (rotosTotQ.data ?? []) : []) as Array<{ cantidad: number }>;
+    const huevosRotosMes = rotosMesRows.reduce((s, r) => s + (r.cantidad ?? 0), 0);
+    const huevosRotosTotales = rotosTotRows.reduce((s, r) => s + (r.cantidad ?? 0), 0);
+
     const totalInicial = galpones.reduce((s, g) => s + (g.inicial_gallinas ?? 0), 0);
     const totalBajasHistoricas = Object.values(bajasPorGalpon).reduce((s, n) => s + n, 0);
     const pctMortalidadHistorica = totalInicial > 0
@@ -123,6 +156,9 @@ export async function GET(request: NextRequest) {
       por_galpon: porGalpon,
       huevos_sin_clasificar: huevosSinClasificar,
       producciones_sin_clasificar: produccionesSinClasificar,
+      huevos_rotos_mes: huevosRotosMes,
+      huevos_rotos_totales: huevosRotosTotales,
+      tipo_roto_configurado: tipoRotoId != null,
     }));
   } catch (err) {
     return NextResponse.json(errorResponse(err instanceof Error ? err.message : "Error"), { status: 500 });

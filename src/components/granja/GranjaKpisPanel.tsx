@@ -26,6 +26,9 @@ type Data = {
   }>;
   huevos_sin_clasificar: number;
   producciones_sin_clasificar: number;
+  huevos_rotos_mes: number;
+  huevos_rotos_totales: number;
+  tipo_roto_configurado: boolean;
 };
 
 function fmtNumero(n: number): string {
@@ -85,7 +88,7 @@ export default function GranjaKpisPanel() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">% Puesta (últimos 7 días)</p>
           <p className={`mt-2 text-3xl font-bold tabular-nums leading-none ${puestaColor}`}>{data.puesta_pct_7d}%</p>
@@ -115,6 +118,14 @@ export default function GranjaKpisPanel() {
           <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-amber-700">{fmtNumero(data.huevos_sin_clasificar)}</p>
           <p className="mt-2 text-[11px] text-slate-500">
             {data.producciones_sin_clasificar} producción(es) pendiente(s)
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Huevos rotos (mes)</p>
+          <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-orange-700">{fmtNumero(data.huevos_rotos_mes)}</p>
+          <p className="mt-2 text-[11px] text-slate-500">
+            {data.tipo_roto_configurado ? <>Total histórico: {fmtNumero(data.huevos_rotos_totales)}</> : <span className="italic text-slate-400">Falta tipo &quot;Roto&quot;</span>}
           </p>
         </div>
       </div>
