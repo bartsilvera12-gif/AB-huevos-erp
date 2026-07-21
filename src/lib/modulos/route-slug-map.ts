@@ -97,22 +97,12 @@ export function canAccessSidebarSlug(
   opts?: { strict?: boolean }
 ): boolean {
   if (esSuperAdmin) return true;
-  // Demo multi-depósito: bypass para módulos nuevos + filtro por rol demo
-  if (slug === "depositos" || slug === "notas_remision") {
-    if (typeof window === "undefined") return true;
-    const rol = window.localStorage.getItem("demo_multideposito_rol_v1");
-    return rol !== "" ? true : true; // ambos roles pueden ver depósitos y notas de remisión
-  }
-  // Filtrar módulos según rol demo: Central no ve Ventas/Caja; Abasto Norte no ve producción/clasificación
+  // Demo multi-depósito: bypass permanente para los módulos nuevos (Depósitos + NR)
+  if (slug === "depositos" || slug === "notas_remision") return true;
+  // Limpieza defensiva: si algún usuario quedó con el rol demo viejo pegado en
+  // localStorage (cuando existía el toggle), lo removemos para que no bloquee Caja.
   if (typeof window !== "undefined") {
-    const rol = window.localStorage.getItem("demo_multideposito_rol_v1");
-    if (rol === "central") {
-      const bloqueados = new Set(["ventas", "presupuestos", "pagos", "comisiones", "notas_credito"]);
-      if (bloqueados.has(slug)) return false;
-    } else if (rol === "abasto_norte") {
-      const bloqueados = new Set(["galpones", "produccion_huevos", "clasificacion_huevos", "recetas", "compras"]);
-      if (bloqueados.has(slug)) return false;
-    }
+    try { window.localStorage.removeItem("demo_multideposito_rol_v1"); } catch {}
   }
   if (slug === "dashboard") return grantedSlugs.has("dashboard");
   return isModuleSlugGranted(slug, grantedSlugs, inactiveSlugs, opts);
