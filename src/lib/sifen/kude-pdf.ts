@@ -111,12 +111,19 @@ function formatMonto(nStr: string, moneda: string): string {
   return n.toLocaleString("es-PY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function readLogoBytes(): Uint8Array | null {
-  const p = path.join(process.cwd(), "public", "logo-neura.png");
-  try {
-    if (fs.existsSync(p)) return new Uint8Array(fs.readFileSync(p));
-  } catch {
-    /* ignore */
+function readLogoBytes(): { bytes: Uint8Array; ext: "png" | "jpg" } | null {
+  // Prioridad de fallback: logo Aviagro (jpeg) → logo Neura (png).
+  const candidates: Array<{ file: string; ext: "png" | "jpg" }> = [
+    { file: "brand/aviagro-logo.jpeg", ext: "jpg" },
+    { file: "logo-neura.png", ext: "png" },
+  ];
+  for (const c of candidates) {
+    const p = path.join(process.cwd(), "public", c.file);
+    try {
+      if (fs.existsSync(p)) return { bytes: new Uint8Array(fs.readFileSync(p)), ext: c.ext };
+    } catch {
+      /* ignore */
+    }
   }
   return null;
 }
@@ -310,13 +317,21 @@ export async function buildKudePdfBuffer(input: BuildKudePdfInput): Promise<Buff
    */
   const brandingLogo = branding?.logoBytes ?? null;
   const fallbackLogo = readLogoBytes();
-  const candidates: Uint8Array[] = [];
-  if (brandingLogo && brandingLogo.length > 0) candidates.push(brandingLogo);
-  if (fallbackLogo) candidates.push(fallbackLogo);
+  const candidates: Array<{ bytes: Uint8Array; ext: "png" | "jpg" | "auto" }> = [];
+  if (brandingLogo && brandingLogo.length > 0) candidates.push({ bytes: brandingLogo, ext: "auto" });
+  if (fallbackLogo) candidates.push({ bytes: fallbackLogo.bytes, ext: fallbackLogo.ext });
 
-  for (const bytes of candidates) {
+  for (const c of candidates) {
     try {
-      logoImg = await pdfDoc.embedPng(bytes);
+      if (c.ext === "jpg") {
+        logoImg = await pdfDoc.embedJpg(c.bytes);
+      } else if (c.ext === "png") {
+        logoImg = await pdfDoc.embedPng(c.bytes);
+      } else {
+        // auto: intentar PNG, si falla JPG
+        try { logoImg = await pdfDoc.embedPng(c.bytes); }
+        catch { logoImg = await pdfDoc.embedJpg(c.bytes); }
+      }
       logoW = logoMaxW;
       const sc = logoW / logoImg.width;
       logoH = logoImg.height * sc;
