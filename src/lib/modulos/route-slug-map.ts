@@ -97,6 +97,26 @@ export function canAccessSidebarSlug(
   opts?: { strict?: boolean }
 ): boolean {
   if (esSuperAdmin) return true;
+  // Demo multi-depósito: bypass para módulos nuevos + filtro por rol demo
+  if (slug === "stock_central" || slug === "notas_remision" || slug === "abasto_norte") {
+    if (typeof window === "undefined") return true;
+    const rol = window.localStorage.getItem("demo_multideposito_rol_v1");
+    if (rol === "admin" || !rol) return true;
+    if (rol === "central") return slug === "stock_central" || slug === "notas_remision";
+    if (rol === "abasto_norte") return slug === "abasto_norte" || slug === "notas_remision";
+    return false;
+  }
+  // Filtrar módulos según rol demo: Central no ve Ventas/Caja; Abasto Norte no ve producción/clasificación
+  if (typeof window !== "undefined") {
+    const rol = window.localStorage.getItem("demo_multideposito_rol_v1");
+    if (rol === "central") {
+      const bloqueados = new Set(["ventas", "presupuestos", "pagos", "comisiones", "notas_credito"]);
+      if (bloqueados.has(slug)) return false;
+    } else if (rol === "abasto_norte") {
+      const bloqueados = new Set(["galpones", "produccion_huevos", "clasificacion_huevos", "recetas", "compras"]);
+      if (bloqueados.has(slug)) return false;
+    }
+  }
   if (slug === "dashboard") return grantedSlugs.has("dashboard");
   return isModuleSlugGranted(slug, grantedSlugs, inactiveSlugs, opts);
 }
@@ -146,6 +166,9 @@ export function pathRequiresModuleSlug(pathname: string): string | null {
   if (p.startsWith("/galpones")) return "galpones";
   if (p.startsWith("/produccion")) return "produccion_huevos";
   if (p.startsWith("/clasificacion")) return "clasificacion_huevos";
+  if (p.startsWith("/stock-central")) return null;
+  if (p.startsWith("/notas-remision")) return null;
+  if (p.startsWith("/abasto-norte")) return null;
   if (p.startsWith("/proveedores")) return "compras";
   if (p.startsWith("/compras")) return "compras";
   if (p.startsWith("/gastos")) return "gastos";

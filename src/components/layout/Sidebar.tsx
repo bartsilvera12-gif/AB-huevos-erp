@@ -140,6 +140,9 @@ const MENU_STRUCTURE: MenuItem[] = [
   { key: "galpones", slug: "galpones", label: "Galpones", href: "/galpones", icon: Warehouse },
   { key: "produccion_huevos", slug: "produccion_huevos", label: "Producción", href: "/produccion", icon: ClipboardList },
   { key: "clasificacion_huevos", slug: "clasificacion_huevos", label: "Clasificación", href: "/clasificacion", icon: Egg },
+  { key: "stock_central", slug: "stock_central", label: "Stock Central", href: "/stock-central", icon: Warehouse },
+  { key: "notas_remision", slug: "notas_remision", label: "Notas de Remisión", href: "/notas-remision", icon: Warehouse },
+  { key: "abasto_norte", slug: "abasto_norte", label: "Abasto Norte", href: "/abasto-norte", icon: Warehouse },
   { key: "inventario", slug: "inventario", label: "Inventario", href: "/inventario", icon: Package, children: [
     { label: "Productos", href: "/inventario" },
     { label: "Movimientos", href: "/inventario/movimientos" },
@@ -213,7 +216,7 @@ const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
   { id: "inicio", titulo: "Inicio", keys: ["dashboard"] },
   { id: "comercial", titulo: "Comercial", keys: ["clientes", "crm", "gestion-clientes", "ventas", "presupuestos", "comisiones", "planes", "agenda"] },
   { id: "finanzas", titulo: "Finanzas", keys: ["pagos", "gastos", "notas_credito", "reportes"] },
-  { id: "operaciones", titulo: "Operaciones", keys: ["inventario", "compras", "recetas", "proyectos", "galpones", "produccion_huevos", "clasificacion_huevos"] },
+  { id: "operaciones", titulo: "Operaciones", keys: ["inventario", "compras", "recetas", "proyectos", "galpones", "produccion_huevos", "clasificacion_huevos", "stock_central", "notas_remision", "abasto_norte"] },
   { id: "omnicanal", titulo: "Omnicanal", keys: ["conversaciones", "conversaciones-finalizadas", "historial-omnicanal", "monitoreo", "campanas"] },
   { id: "marketing", titulo: "Marketing y Automatización", keys: ["marketing", "marketing_ops", "sorteos"] },
   { id: "administracion", titulo: "Administración", keys: ["usuarios", "configuracion"] },
