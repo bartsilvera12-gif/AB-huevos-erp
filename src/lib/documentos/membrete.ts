@@ -7,10 +7,11 @@
  */
 
 export const EMPRESA_DOC = {
-  nombre: "Aviagro",
+  nombre: "AVIAGRO E.A.S.",
   actividad: [] as string[],
-  telefono: "",
-  direccion: [] as string[],
+  telefono: "0987287398",
+  email: "Aviagroeas@gmail.com",
+  direccion: ["Julio Correa 279"],
   /** Logo del cliente. Servido desde /public. */
   logoUrl: "/brand/aviagro-logo.jpeg",
 };
@@ -34,6 +35,7 @@ export function membreteA4(origin = ""): string {
     ? e.actividad.map((a) => `<div style="color:#6b7280;">${esc(a)}</div>`).join("")
     : "";
   const telHtml = e.telefono ? `<div style="margin-top:4px;"><strong>Tel:</strong> ${esc(e.telefono)}</div>` : "";
+  const emailHtml = e.email ? `<div><strong>Email:</strong> ${esc(e.email)}</div>` : "";
   const dirHtml = e.direccion.length ? `<div>${e.direccion.map(esc).join(" · ")}</div>` : "";
   return `
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:2px solid #2E7D32;padding-bottom:12px;margin-bottom:16px;">
@@ -44,6 +46,7 @@ export function membreteA4(origin = ""): string {
       <div style="font-size:14px;font-weight:800;color:#1f2937;">${esc(e.nombre)}</div>
       ${actividadHtml}
       ${telHtml}
+      ${emailHtml}
       ${dirHtml}
     </div>
   </div>`;
@@ -56,6 +59,7 @@ export function membreteTicket(origin = ""): string {
   const e = EMPRESA_DOC;
   const logo = origin ? `${origin}${e.logoUrl}` : e.logoUrl;
   const telHtml = e.telefono ? `<div style="font-size:10px;">Tel: ${esc(e.telefono)}</div>` : "";
+  const emailHtml = e.email ? `<div style="font-size:10px;word-break:break-all;">${esc(e.email)}</div>` : "";
   const dirHtml = e.direccion.length
     ? e.direccion.map((d) => `<div style="font-size:10px;">${esc(d)}</div>`).join("")
     : "";
@@ -63,7 +67,8 @@ export function membreteTicket(origin = ""): string {
   <div style="text-align:center;padding-bottom:6px;margin-bottom:6px;border-bottom:1px dashed #000;">
     <img src="${esc(logo)}" alt="${esc(e.nombre)}" style="max-width:210px;max-height:110px;width:auto;height:auto;object-fit:contain;display:inline-block;margin:0 auto 4px;" />
     <div style="font-weight:700;font-size:12px;">${esc(e.nombre)}</div>
-    ${telHtml}
     ${dirHtml}
+    ${telHtml}
+    ${emailHtml}
   </div>`;
 }
