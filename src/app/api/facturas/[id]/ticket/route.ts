@@ -35,7 +35,8 @@ function fmtCdc(cdc: string): string {
   return cdc.match(/.{1,4}/g)?.join(" ") ?? cdc;
 }
 
-function fmtFechaHora(iso: string): string {
+/** Para "documento generado" (hora servidor UTC → convertir a PY UTC-3). */
+function fmtFechaHoraUTC(iso: string): string {
   if (!iso) return "";
   try {
     const d = new Date(iso);
@@ -47,6 +48,14 @@ function fmtFechaHora(iso: string): string {
     const mi = String(py.getUTCMinutes()).padStart(2, "0");
     return `${dd}/${mm}/${yy} ${hh}:${mi}`;
   } catch { return iso; }
+}
+
+/** Para dFeEmiDE (viene en hora local PY del XML SET). Formateo sin conversión. */
+function fmtFechaHoraDE(iso: string): string {
+  if (!iso) return "";
+  const m = iso.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (!m) return iso;
+  return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`;
 }
 
 export async function GET(
@@ -151,7 +160,7 @@ function renderTicketHtml(opts: {
   .right { text-align: right; }
   .bold { font-weight: 700; }
   .divider { border-top: 1px dashed #000; margin: 3px 0; }
-  .logo { max-width: ${widthMm === 58 ? 40 : 50}mm; max-height: ${widthMm === 58 ? 18 : 22}mm; margin: 0 auto 2px; display: block; object-fit: contain; }
+  .logo { max-width: ${widthMm === 58 ? 52 : 72}mm; max-height: ${widthMm === 58 ? 28 : 40}mm; margin: 0 auto 4px; display: block; object-fit: contain; }
   .head { font-size: ${fs + 1}px; }
   .title { font-size: ${fs + 2}px; letter-spacing: 1px; }
   table { width: 100%; border-collapse: collapse; }
@@ -193,7 +202,7 @@ function renderTicketHtml(opts: {
 
   <div class="divider"></div>
 
-  <div><span class="bold">Fecha:</span> ${esc(fmtFechaHora(p.dFeEmiDE))}</div>
+  <div><span class="bold">Fecha:</span> ${esc(fmtFechaHoraDE(p.dFeEmiDE))}</div>
   <div><span class="bold">Cond. venta:</span> ${esc(p.operacion.condicionVenta)}</div>
 
   <div class="divider"></div>
@@ -242,7 +251,7 @@ function renderTicketHtml(opts: {
   <div class="footer">
     Documento electrónico aprobado por SET.<br/>
     Este ticket es equivalente al KuDE oficial.<br/>
-    ${esc(fmtFechaHora(new Date().toISOString()))}
+    ${esc(fmtFechaHoraUTC(new Date().toISOString()))}
   </div>
 </div>
 

@@ -13,19 +13,14 @@ function fmt(n: number) { return n.toLocaleString("es-PY"); }
 
 export default function DepositosPage() {
   const [stock, setStock] = useState<Record<string, Record<string, number>>>({});
-  const [ubicacionActiva, setUbicacionActiva] = useState<string>("todos");
+  const [ubicacionActiva, setUbicacionActiva] = useState<string>(UBICACIONES_DEMO[0]?.id ?? "");
 
   useEffect(() => { setStock(getStock()); }, []);
 
-  const totalPorUbicacion = UBICACIONES_DEMO.map((u) => ({
-    ...u,
-    total: Object.values(stock[u.id] ?? {}).reduce((s, n) => s + n, 0),
-    conStock: PRODUCTOS_DEMO.filter((p) => (stock[u.id]?.[p.id] ?? 0) > 0).length,
-  }));
-
-  const ubicacionesVisibles = ubicacionActiva === "todos"
-    ? UBICACIONES_DEMO
-    : UBICACIONES_DEMO.filter((u) => u.id === ubicacionActiva);
+  const depositoActual = UBICACIONES_DEMO.find((u) => u.id === ubicacionActiva) ?? UBICACIONES_DEMO[0];
+  const stockActual = stock[ubicacionActiva] ?? {};
+  const totalActual = Object.values(stockActual).reduce((s, n) => s + n, 0);
+  const conStockActual = PRODUCTOS_DEMO.filter((p) => (stockActual[p.id] ?? 0) > 0).length;
 
   return (
     <div className="space-y-6">
@@ -55,23 +50,16 @@ export default function DepositosPage() {
         </div>
       </div>
 
-      {/* Selector de vista */}
+      {/* Selector de depósito (uno a la vez) */}
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 mr-2">Ver depósito:</span>
-          <button
-            type="button"
-            onClick={() => setUbicacionActiva("todos")}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition ${ubicacionActiva === "todos" ? "bg-slate-800 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
-          >
-            Todos ({UBICACIONES_DEMO.length})
-          </button>
+          <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 mr-2">Depósito:</span>
           {UBICACIONES_DEMO.map((u) => (
             <button
               key={u.id}
               type="button"
               onClick={() => setUbicacionActiva(u.id)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-full transition ${ubicacionActiva === u.id ? "bg-emerald-600 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition ${ubicacionActiva === u.id ? "bg-emerald-600 text-white shadow" : "border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
             >
               {u.nombre}
             </button>
@@ -79,19 +67,22 @@ export default function DepositosPage() {
         </div>
       </div>
 
-      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-${ubicacionesVisibles.length}`}>
-        {totalPorUbicacion.filter((u) => ubicacionActiva === "todos" || u.id === ubicacionActiva).map((u) => (
-          <div key={u.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{u.nombre}</p>
-            <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-emerald-700">{fmt(u.total)}</p>
-            <p className="mt-1 text-[11px] text-slate-500">{u.conStock} de {PRODUCTOS_DEMO.length} productos con stock</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">{depositoActual?.nombre}</p>
+          <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-emerald-700">{fmt(totalActual)}</p>
+          <p className="mt-1 text-[11px] text-slate-500">planchas en total</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Productos con stock</p>
+          <p className="mt-2 text-3xl font-bold tabular-nums leading-none text-slate-800">{conStockActual} <span className="text-base font-normal text-slate-500">/ {PRODUCTOS_DEMO.length}</span></p>
+          <p className="mt-1 text-[11px] text-slate-500">de {PRODUCTOS_DEMO.length} productos definidos</p>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-slate-800">Stock consolidado por producto</h2>
+          <h2 className="text-sm font-semibold text-slate-800">Stock en {depositoActual?.nombre}</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -99,30 +90,23 @@ export default function DepositosPage() {
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
                 <th className="px-5 py-3">SKU</th>
                 <th className="px-5 py-3">Producto</th>
-                {ubicacionesVisibles.map((u) => (
-                  <th key={u.id} className="px-5 py-3 text-right">{u.nombre}</th>
-                ))}
-                {ubicacionActiva === "todos" && <th className="px-5 py-3 text-right">Total</th>}
+                <th className="px-5 py-3 text-right">Stock (planchas)</th>
+                <th className="px-5 py-3">Unidad</th>
               </tr>
             </thead>
             <tbody>
               {PRODUCTOS_DEMO.map((p) => {
-                const cantPorU = ubicacionesVisibles.map((u) => stock[u.id]?.[p.id] ?? 0);
-                const total = cantPorU.reduce((s, n) => s + n, 0);
+                const n = stockActual[p.id] ?? 0;
                 return (
                   <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-emerald-50/40 transition-colors">
                     <td className="px-5 py-3 font-mono text-xs text-slate-500">{p.sku}</td>
                     <td className="px-5 py-3 font-semibold text-slate-800 flex items-center gap-2">
                       <Egg className="h-4 w-4 text-slate-400" />{p.nombre}
                     </td>
-                    {cantPorU.map((n, i) => (
-                      <td key={ubicacionesVisibles[i].id} className={`px-5 py-3 text-right tabular-nums ${n > 0 ? "text-slate-800 font-medium" : "text-slate-400"}`}>
-                        {fmt(n)}
-                      </td>
-                    ))}
-                    {ubicacionActiva === "todos" && (
-                      <td className="px-5 py-3 text-right tabular-nums font-semibold text-emerald-700">{fmt(total)}</td>
-                    )}
+                    <td className={`px-5 py-3 text-right tabular-nums font-medium ${n > 0 ? "text-slate-800" : "text-slate-400"}`}>
+                      {n > 0 ? fmt(n) : "0"}
+                    </td>
+                    <td className="px-5 py-3 text-slate-600 text-xs">{p.unidad}</td>
                   </tr>
                 );
               })}
@@ -130,7 +114,7 @@ export default function DepositosPage() {
           </table>
         </div>
         <p className="border-t border-slate-100 px-5 py-3 text-[11px] text-slate-400 italic">
-          La clasificación de huevos ingresa siempre a <strong>Casa Central</strong>. Para llevar stock a Abasto Norte se emite una NR y Abasto Norte debe aprobarla.
+          La clasificación de huevos ingresa siempre a <strong>Casa Central</strong>. Para llevar stock a otro depósito se emite una NR y el destino debe aprobarla.
         </p>
       </div>
     </div>
