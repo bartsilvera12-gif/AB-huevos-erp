@@ -3,7 +3,6 @@ import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import AppShell from "../components/AppShell";
 import { ThemeProvider } from "../components/ThemeProvider";
 import AuthGuard from "../components/AuthGuard";
-import RolSelector from "../components/demo-multideposito/RolSelector";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -39,7 +38,6 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthGuard>
             <AppShell>{children}</AppShell>
-            <RolSelector />
           </AuthGuard>
         </ThemeProvider>
       </body>
