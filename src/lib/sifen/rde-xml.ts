@@ -68,22 +68,19 @@ const SIFEN_FECHA_REFERENCIA_TZ = "America/Asuncion";
 const SIFEN_FIRMA_SKEW_MS = 120_000;
 
 function wallYmdAndHmsInSifenTz(d: Date): { ymd: string; hms: string } {
-  const tz = SIFEN_FECHA_REFERENCIA_TZ;
-  const ymd = d.toLocaleDateString("en-CA", { timeZone: tz });
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    hourCycle: "h23",
-  }).formatToParts(d);
-  const pick2 = (ty: Intl.DateTimeFormatPart["type"]) => {
-    const raw = parts.find((p) => p.type === ty)?.value ?? "0";
-    const n = parseInt(raw.replace(/\D/g, ""), 10);
-    return Number.isFinite(n) ? String(n).padStart(2, "0") : "00";
-  };
-  return { ymd, hms: `${pick2("hour")}:${pick2("minute")}:${pick2("second")}` };
+  // Paraguay = UTC-3 permanente desde octubre 2024 (sin horario de verano).
+  // Hardcodeamos el offset porque el tzdata del server (Node/Postgres) sigue
+  // devolviendo UTC-4 para 'America/Asuncion' (base obsoleta). Sin este fix,
+  // el XML nace 1 hora atrasado y el ticket muestra la hora equivocada.
+  void SIFEN_FECHA_REFERENCIA_TZ;
+  const py = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+  const y = py.getUTCFullYear();
+  const mo = String(py.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(py.getUTCDate()).padStart(2, "0");
+  const hh = String(py.getUTCHours()).padStart(2, "0");
+  const mi = String(py.getUTCMinutes()).padStart(2, "0");
+  const ss = String(py.getUTCSeconds()).padStart(2, "0");
+  return { ymd: `${y}-${mo}-${day}`, hms: `${hh}:${mi}:${ss}` };
 }
 
 function formatDeDateTimeEnTzSifen(d: Date): string {
