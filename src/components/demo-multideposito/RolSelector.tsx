@@ -33,7 +33,7 @@ export default function RolSelector() {
   }
 
   return (
-    <div className="fixed top-3 right-4 z-[70] print:hidden">
+    <div className="fixed bottom-4 right-4 z-[70] print:hidden">
       <div className="rounded-full border border-slate-300 bg-white/95 backdrop-blur px-2 py-1 shadow-md flex items-center gap-1 text-[11px]">
         <span className="text-slate-500 mr-1 hidden sm:inline">Rol demo:</span>
         <button

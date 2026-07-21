@@ -39,6 +39,9 @@ import {
   Warehouse,
   Egg,
   ClipboardList,
+  PackageOpen,
+  Truck,
+  Store,
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -140,9 +143,9 @@ const MENU_STRUCTURE: MenuItem[] = [
   { key: "galpones", slug: "galpones", label: "Galpones", href: "/galpones", icon: Warehouse },
   { key: "produccion_huevos", slug: "produccion_huevos", label: "Producción", href: "/produccion", icon: ClipboardList },
   { key: "clasificacion_huevos", slug: "clasificacion_huevos", label: "Clasificación", href: "/clasificacion", icon: Egg },
-  { key: "stock_central", slug: "stock_central", label: "Stock Central", href: "/stock-central", icon: Warehouse },
-  { key: "notas_remision", slug: "notas_remision", label: "Notas de Remisión", href: "/notas-remision", icon: Warehouse },
-  { key: "abasto_norte", slug: "abasto_norte", label: "Abasto Norte", href: "/abasto-norte", icon: Warehouse },
+  { key: "stock_central", slug: "stock_central", label: "Stock Central", href: "/stock-central", icon: PackageOpen },
+  { key: "notas_remision", slug: "notas_remision", label: "Notas de Remisión", href: "/notas-remision", icon: Truck },
+  { key: "abasto_norte", slug: "abasto_norte", label: "Abasto Norte", href: "/abasto-norte", icon: Store },
   { key: "inventario", slug: "inventario", label: "Inventario", href: "/inventario", icon: Package, children: [
     { label: "Productos", href: "/inventario" },
     { label: "Movimientos", href: "/inventario/movimientos" },
