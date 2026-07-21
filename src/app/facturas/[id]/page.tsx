@@ -231,15 +231,33 @@ function FacturaDetalleInner() {
         onComercialUpdated={reloadFacturaComercial}
       />
 
-      <div className="flex justify-center print:hidden">
+      <div className="flex flex-wrap justify-center gap-2 print:hidden">
+        <a
+          href={`/api/facturas/${factura.id}/ticket?w=80`}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-5 py-3 text-sm font-semibold text-white shadow-md hover:shadow-lg active:scale-[.98]"
+          title="Ticket térmico 80mm"
+        >
+          🧾 Factura ticket 80mm
+        </a>
+        <a
+          href={`/api/facturas/${factura.id}/ticket?w=58`}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-2 rounded-xl bg-white border border-[#4FAEB2] px-5 py-3 text-sm font-semibold text-[#3F8E91] shadow-sm hover:shadow-md"
+          title="Ticket térmico 58mm"
+        >
+          🧾 Factura ticket 58mm
+        </a>
         <a
           href={`/api/facturas/${factura.id}/sifen/kude`}
           target="_blank"
           rel="noopener"
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-6 py-3 text-sm font-semibold text-white shadow-md hover:shadow-lg active:scale-[.98]"
-          title="Descargar KuDE oficial SIFEN (PDF)"
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          title="KuDE oficial en formato A4 (PDF)"
         >
-          📄 Descargar factura (KuDE PDF)
+          📄 A4 PDF
         </a>
       </div>
     </div>
