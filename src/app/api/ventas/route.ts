@@ -96,6 +96,24 @@ export async function GET(request: NextRequest) {
     const ventasRows = (ventasQ.data ?? []) as VentaRow[];
     const itemsRows = (itemsQ.data ?? []) as VentaItemRow[];
 
+    // Estado SIFEN por factura_id (para saber si podemos mostrar "Factura" en la lista)
+    const facturaIds = Array.from(new Set(
+      ventasRows.map((r) => (r as unknown as { factura_id?: string | null }).factura_id).filter((x): x is string => !!x)
+    ));
+    const estadoPorFactura = new Map<string, string>();
+    if (facturaIds.length > 0) {
+      const feQ = await ctx.supabase
+        .from("factura_electronica")
+        .select("factura_id, estado_sifen")
+        .eq("empresa_id", empresaId)
+        .in("factura_id", facturaIds);
+      if (!feQ.error) {
+        for (const r of (feQ.data ?? []) as Array<{ factura_id: string; estado_sifen: string }>) {
+          estadoPorFactura.set(r.factura_id, r.estado_sifen);
+        }
+      }
+    }
+
     const byVenta = new Map<string, VentaItemRow[]>();
     for (const row of itemsRows) {
       const list = byVenta.get(row.venta_id) ?? [];
@@ -131,6 +149,10 @@ export async function GET(request: NextRequest) {
         anulada_motivo: (r as unknown as { anulada_motivo?: string | null }).anulada_motivo ?? null,
         cliente_id: (r as unknown as { cliente_id?: string | null }).cliente_id ?? null,
         factura_id: (r as unknown as { factura_id?: string | null }).factura_id ?? null,
+        factura_estado_sifen: (() => {
+          const fid = (r as unknown as { factura_id?: string | null }).factura_id;
+          return fid ? estadoPorFactura.get(fid) ?? null : null;
+        })(),
       };
     });
 

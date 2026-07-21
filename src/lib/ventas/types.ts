@@ -54,6 +54,8 @@ export interface Venta {
 
   /** UUID de la factura fiscal generada (nullable si venta es solo ticket). */
   factura_id?: string | null;
+  /** Estado SIFEN de la factura: borrador | generado | enviado | aprobado | rechazado | cancelado. */
+  factura_estado_sifen?: string | null;
 
   /** Anulación (soft): la venta se contabiliza pero no cuenta en KPIs de venta neta. */
   anulada?: boolean;
