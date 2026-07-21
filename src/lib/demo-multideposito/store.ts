@@ -2,19 +2,21 @@
 
 /**
  * Demo multi-depósito — estado hardcodeado en localStorage.
- * NO conecta a la DB. Solo para validar el flujo con el cliente antes de
- * migrar el schema y meter mano en producción.
- *
- * Cuando cerremos el diseño, este archivo se reemplaza por endpoints reales.
+ * NO conecta a la DB. Solo para validar el flujo con el cliente.
  */
 
-export type DemoUbicacionId = "central" | "abasto_norte";
+export type DemoUbicacion = { id: string; nombre: string; codigo: string };
+
+export const UBICACIONES_DEMO: DemoUbicacion[] = [
+  { id: "central",      nombre: "Casa Central", codigo: "CENTRAL" },
+  { id: "abasto_norte", nombre: "Abasto Norte", codigo: "ABASTO-N" },
+];
 
 export type DemoProducto = {
   id: string;
   nombre: string;
   sku: string;
-  unidad: string; // "plancha", "unidad", "kg", etc.
+  unidad: string;
 };
 
 export const PRODUCTOS_DEMO: DemoProducto[] = [
@@ -26,45 +28,50 @@ export const PRODUCTOS_DEMO: DemoProducto[] = [
   { id: "p-picado",  nombre: "Huevo Picado",  sku: "HPI-30", unidad: "plancha" },
 ];
 
-export type DemoStockPorUbicacion = Record<DemoUbicacionId, Record<string, number>>;
+export type DemoStockPorUbicacion = Record<string, Record<string, number>>;
 
 const STOCK_INICIAL: DemoStockPorUbicacion = {
   central: {
-    "p-jumbo": 120,
-    "p-super": 240,
-    "p-tipoa": 180,
-    "p-tipob": 160,
-    "p-tipoc": 90,
-    "p-picado": 30,
+    "p-jumbo": 120, "p-super": 240, "p-tipoa": 180,
+    "p-tipob": 160, "p-tipoc": 90, "p-picado": 30,
   },
   abasto_norte: {
-    "p-jumbo": 0,
-    "p-super": 0,
-    "p-tipoa": 0,
-    "p-tipob": 0,
-    "p-tipoc": 0,
-    "p-picado": 0,
+    "p-jumbo": 0, "p-super": 0, "p-tipoa": 0,
+    "p-tipob": 0, "p-tipoc": 0, "p-picado": 0,
   },
 };
 
 export type EstadoNR = "pendiente" | "aprobada" | "rechazada";
+
+export type DemoTransporte = {
+  transportista?: string;
+  ruc_transportista?: string;
+  conductor?: string;
+  ci_conductor?: string;
+  chapa?: string;
+  fecha_inicio_traslado?: string;
+  fecha_fin_traslado?: string;
+};
 
 export type DemoNotaRemision = {
   id: string;
   numero: string;
   fecha: string;
   emisor: string;
-  origen: DemoUbicacionId;
-  destino: DemoUbicacionId;
+  origen: string;         // ubicacion.id
+  destino: string;        // ubicacion.id
+  motivo: "traslado" | "venta" | "devolucion";
   items: Array<{ producto_id: string; cantidad: number }>;
+  transporte: DemoTransporte;
+  observaciones?: string;
   estado: EstadoNR;
   motivo_rechazo?: string;
   aprobada_at?: string;
   aprobada_por?: string;
 };
 
-const KEY_STOCK = "demo_multideposito_stock_v1";
-const KEY_NR = "demo_multideposito_nr_v1";
+const KEY_STOCK = "demo_multideposito_stock_v2";
+const KEY_NR = "demo_multideposito_nr_v2";
 const KEY_ROL = "demo_multideposito_rol_v1";
 const KEY_SEQ = "demo_multideposito_seq_v1";
 
@@ -115,10 +122,6 @@ function nextSeq(): number {
   return n;
 }
 
-/**
- * Crear una NR nueva en estado 'pendiente'. NO mueve stock todavía —
- * eso pasa cuando el destino aprueba.
- */
 export function crearNR(input: Omit<DemoNotaRemision, "id" | "numero" | "fecha" | "estado">): DemoNotaRemision {
   const nr: DemoNotaRemision = {
     ...input,
@@ -132,10 +135,15 @@ export function crearNR(input: Omit<DemoNotaRemision, "id" | "numero" | "fecha" 
   return nr;
 }
 
-/**
- * Aprobar NR: descuenta stock del origen, suma al destino, cambia estado a 'aprobada'.
- * Es atómico dentro del localStorage. Retorna la NR actualizada o error string.
- */
+export function getNR(id: string): DemoNotaRemision | null {
+  return getNRs().find((n) => n.id === id) ?? null;
+}
+
+export function getNRPorNumero(numero: string): DemoNotaRemision | null {
+  const n = numero.trim().toUpperCase();
+  return getNRs().find((x) => x.numero.toUpperCase() === n) ?? null;
+}
+
 export function aprobarNR(id: string, aprobador: string): { ok: true; nr: DemoNotaRemision } | { ok: false; error: string } {
   const all = getNRs();
   const nr = all.find((n) => n.id === id);
@@ -143,7 +151,6 @@ export function aprobarNR(id: string, aprobador: string): { ok: true; nr: DemoNo
   if (nr.estado !== "pendiente") return { ok: false, error: `NR ya está ${nr.estado}` };
 
   const stock = getStock();
-  // Validar stock en origen
   for (const it of nr.items) {
     const disp = stock[nr.origen]?.[it.producto_id] ?? 0;
     if (disp < it.cantidad) {
@@ -151,8 +158,9 @@ export function aprobarNR(id: string, aprobador: string): { ok: true; nr: DemoNo
       return { ok: false, error: `Stock insuficiente en ${nombreUbicacion(nr.origen)} de ${p?.nombre ?? it.producto_id}: hay ${disp}, se piden ${it.cantidad}.` };
     }
   }
-  // Aplicar
   const nuevo = JSON.parse(JSON.stringify(stock)) as DemoStockPorUbicacion;
+  if (!nuevo[nr.origen]) nuevo[nr.origen] = {};
+  if (!nuevo[nr.destino]) nuevo[nr.destino] = {};
   for (const it of nr.items) {
     nuevo[nr.origen][it.producto_id] = (nuevo[nr.origen][it.producto_id] ?? 0) - it.cantidad;
     nuevo[nr.destino][it.producto_id] = (nuevo[nr.destino][it.producto_id] ?? 0) + it.cantidad;
@@ -173,6 +181,6 @@ export function rechazarNR(id: string, motivo: string): { ok: true; nr: DemoNota
   return { ok: true, nr: actualizada };
 }
 
-export function nombreUbicacion(u: DemoUbicacionId): string {
-  return u === "central" ? "Stock Central" : "Abasto Norte";
+export function nombreUbicacion(id: string): string {
+  return UBICACIONES_DEMO.find((u) => u.id === id)?.nombre ?? id;
 }
