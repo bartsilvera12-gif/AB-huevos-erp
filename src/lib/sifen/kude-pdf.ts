@@ -368,9 +368,10 @@ export async function buildKudePdfBuffer(input: BuildKudePdfInput): Promise<Buff
   drawRectFromTop(page, margin, cursorTop, innerW, headerH, { fill: rgb(1, 1, 1), border: primary });
 
   if (logoImg && logoW > 0) {
+    const logoOffsetTop = 6; // subir un poco el logo dentro del header
     page.drawImage(logoImg, {
       x: margin + headerPad,
-      y: baselineFromTop(page, cursorTop + headerPad + logoH),
+      y: baselineFromTop(page, cursorTop + headerPad + logoH - logoOffsetTop),
       width: logoW,
       height: logoH,
     });
