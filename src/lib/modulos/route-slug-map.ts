@@ -127,7 +127,11 @@ export function firstAccessibleHref(
 export function pathRequiresModuleSlug(pathname: string): string | null {
   const p = pathname.split("?")[0] ?? pathname;
   if (!p) return null;
-  if (p === "/") return "dashboard";
+  // El path raíz "/" no exige módulo: el propio DashboardPage tiene un useEffect
+  // que redirige a /inventario (u otro fallback) si el usuario no tiene el
+  // módulo dashboard. Antes exigir el slug acá causaba loops porque AuthGuard
+  // bloqueaba antes de que corriera la lógica de redirección de la página.
+  if (p === "/") return null;
   if (p.startsWith("/login")) return null;
   if (p.startsWith("/admin")) return null;
   if (p.startsWith("/api")) return null;
