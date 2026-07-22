@@ -224,9 +224,18 @@ export async function insertComprasConImpacto(
   const client = await pool().connect();
   const insertedRows: CompraRow[] = [];
   const warnings: string[] = [];
+  const tUbic = quoteSchemaTable(schema, "inventario_ubicaciones");
+  const tSU = quoteSchemaTable(schema, "productos_stock_ubicacion");
   try {
     await client.query("BEGIN");
     const numero = await nextNumeroControl(client, schema, empresaId);
+
+    // Casa Central: compras entran acá (dual-write con stock global).
+    const centralQ = await client.query<{ id: string }>(
+      `SELECT id FROM ${tUbic} WHERE empresa_id = $1::uuid AND codigo = 'CENTRAL' AND activo = true LIMIT 1`,
+      [empresaId]
+    );
+    const centralId = centralQ.rows[0]?.id ?? null;
 
     for (const it of items) {
       const { rows: compraRows } = await client.query<CompraRow>(
@@ -260,20 +269,20 @@ export async function insertComprasConImpacto(
       );
       insertedRows.push(compraRows[0]);
 
-      // Movimiento ENTRADA por línea (best-effort).
+      // Movimiento ENTRADA por línea (best-effort). Ubicación = Casa Central.
       try {
         await client.query(
           `INSERT INTO ${tM} (
              empresa_id, producto_id, producto_nombre, producto_sku,
              tipo, cantidad, costo_unitario, origen, referencia, fecha,
-             created_by, usuario_nombre
+             created_by, usuario_nombre, ubicacion_id
            )
            SELECT $1::uuid, $2::uuid, $3, COALESCE(p.sku, ''),
                   'ENTRADA', $4::numeric, $5::numeric, 'compra', $6, now(),
-                  $7::uuid, $8
+                  $7::uuid, $8, $9::uuid
            FROM ${tP} p WHERE p.id = $2::uuid`,
           [empresaId, it.producto_id, it.producto_nombre, it.cantidad,
-           it.costo_unitario, numero, header.created_by, header.usuario_nombre]
+           it.costo_unitario, numero, header.created_by, header.usuario_nombre, centralId]
         );
       } catch (movErr) {
         const msg = movErr instanceof Error ? movErr.message : String(movErr);
@@ -287,15 +296,36 @@ export async function insertComprasConImpacto(
       // precio_venta SOLO se actualiza si la compra trae un precio > 0 (productos
       // vendibles). Para materia prima / insumos sin precio (0 o vacío) mantenemos
       // el precio actual: nunca lo pisamos con 0 ni con un valor inventado.
+      // costo_promedio ponderado: (stock_ant * costo_ant + qty_nueva * costo_nuevo) / (stock_ant + qty_nueva).
+      // Si stock_ant + qty_nueva es 0 (edge case), toma el costo nuevo.
       await client.query(
         `UPDATE ${tP}
-            SET stock_actual = stock_actual + $1::numeric,
-                costo_promedio = $2::numeric,
+            SET costo_promedio = CASE
+                  WHEN (stock_actual + $1::numeric) > 0
+                    THEN ROUND(
+                      ((COALESCE(stock_actual,0) * COALESCE(costo_promedio,0)) + ($1::numeric * $2::numeric))
+                      / (stock_actual + $1::numeric),
+                      6
+                    )
+                  ELSE $2::numeric
+                END,
+                stock_actual = stock_actual + $1::numeric,
                 precio_venta = CASE WHEN $3::numeric > 0 THEN $3::numeric ELSE precio_venta END,
                 updated_at = now()
           WHERE id = $4::uuid AND empresa_id = $5::uuid`,
         [it.cantidad, it.costo_unitario, it.precio_venta, it.producto_id, empresaId]
       );
+
+      // Multi-depósito: reflejar entrada en Casa Central.
+      if (centralId) {
+        await client.query(
+          `INSERT INTO ${tSU} (empresa_id, ubicacion_id, producto_id, stock, updated_at)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4::numeric, now())
+           ON CONFLICT (empresa_id, ubicacion_id, producto_id)
+           DO UPDATE SET stock = ${tSU}.stock + EXCLUDED.stock, updated_at = now()`,
+          [empresaId, centralId, it.producto_id, it.cantidad]
+        );
+      }
 
       // Mantener relación producto↔proveedor (costo_habitual). No pisa marca.
       await upsertProveedorProducto(
@@ -329,6 +359,8 @@ export async function insertCompraConImpacto(
   const tM = quoteSchemaTable(schema, "movimientos_inventario");
   const tP = quoteSchemaTable(schema, "productos");
   const tPP = quoteSchemaTable(schema, "proveedor_productos");
+  const tUbic2 = quoteSchemaTable(schema, "inventario_ubicaciones");
+  const tSU2 = quoteSchemaTable(schema, "productos_stock_ubicacion");
 
   const client = await pool().connect();
   let movimientoId: string | null = null;
@@ -337,6 +369,12 @@ export async function insertCompraConImpacto(
     await client.query("BEGIN");
 
     const numero = await nextNumeroControl(client, schema, empresaId);
+
+    const centralQ2 = await client.query<{ id: string }>(
+      `SELECT id FROM ${tUbic2} WHERE empresa_id = $1::uuid AND codigo = 'CENTRAL' AND activo = true LIMIT 1`,
+      [empresaId]
+    );
+    const centralId2 = centralQ2.rows[0]?.id ?? null;
 
     const { rows: compraRows } = await client.query<CompraRow>(
       `INSERT INTO ${tC} (
@@ -387,11 +425,11 @@ export async function insertCompraConImpacto(
         `INSERT INTO ${tM} (
            empresa_id, producto_id, producto_nombre, producto_sku,
            tipo, cantidad, costo_unitario, origen, referencia, fecha,
-           created_by, usuario_nombre
+           created_by, usuario_nombre, ubicacion_id
          )
          SELECT $1::uuid, $2::uuid, $3, COALESCE(p.sku, ''),
                 'ENTRADA', $4::numeric, $5::numeric, 'compra', $6, now(),
-                $7::uuid, $8
+                $7::uuid, $8, $9::uuid
          FROM ${tP} p WHERE p.id = $2::uuid
          RETURNING id`,
         [
@@ -403,6 +441,7 @@ export async function insertCompraConImpacto(
           numero,
           d.created_by,
           d.usuario_nombre,
+          centralId2,
         ]
       );
       movimientoId = movRows[0]?.id ?? null;
@@ -417,17 +456,35 @@ export async function insertCompraConImpacto(
         "La compra se guardó pero no se pudo registrar el movimiento de entrada en inventario.";
     }
 
-    // Actualizar producto: stock + costo_promedio siempre; precio_venta solo si > 0
+    // Actualizar producto: stock + costo_promedio ponderado; precio_venta solo si > 0
     // (no pisamos el precio de insumos / materia prima con 0).
     await client.query(
       `UPDATE ${tP}
-          SET stock_actual = stock_actual + $1::numeric,
-              costo_promedio = $2::numeric,
+          SET costo_promedio = CASE
+                WHEN (stock_actual + $1::numeric) > 0
+                  THEN ROUND(
+                    ((COALESCE(stock_actual,0) * COALESCE(costo_promedio,0)) + ($1::numeric * $2::numeric))
+                    / (stock_actual + $1::numeric),
+                    6
+                  )
+                ELSE $2::numeric
+              END,
+              stock_actual = stock_actual + $1::numeric,
               precio_venta = CASE WHEN $3::numeric > 0 THEN $3::numeric ELSE precio_venta END,
               updated_at = now()
         WHERE id = $4::uuid AND empresa_id = $5::uuid`,
       [d.cantidad, d.costo_unitario, d.precio_venta, d.producto_id, empresaId]
     );
+
+    if (centralId2) {
+      await client.query(
+        `INSERT INTO ${tSU2} (empresa_id, ubicacion_id, producto_id, stock, updated_at)
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::numeric, now())
+         ON CONFLICT (empresa_id, ubicacion_id, producto_id)
+         DO UPDATE SET stock = ${tSU2}.stock + EXCLUDED.stock, updated_at = now()`,
+        [empresaId, centralId2, d.producto_id, d.cantidad]
+      );
+    }
 
     // Mantener relación producto↔proveedor (costo_habitual). No pisa marca.
     await upsertProveedorProducto(

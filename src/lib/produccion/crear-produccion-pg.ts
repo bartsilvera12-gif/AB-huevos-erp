@@ -1,5 +1,6 @@
 import { createServiceRoleClientWithDbSchema } from "@/lib/supabase/empresa-data-schema";
 import { convertirCantidad } from "@/lib/unidades/convert";
+import { getUbicacionIdByCodigo, ajustarStockUbicacion } from "@/lib/multideposito/server";
 
 /** Un faltante de materia prima detectado al validar la fabricación. */
 export interface FaltanteInsumoProduccion {
@@ -406,6 +407,10 @@ export async function crearProduccionPg(params: CrearProduccionParams): Promise<
       if (insItems.error) throw new Error(insItems.error.message);
     }
 
+    // Multi-depósito: producción impacta stock de Casa Central (los insumos salen de
+    // Central y el terminado entra a Central; para vender hay que emitir NR a Abasto).
+    const centralUbicacionId = await getUbicacionIdByCodigo(sb, params.empresaId, "CENTRAL");
+
     // 3) Descontar cada insumo (floor 0) + movimiento SALIDA origen 'produccion'.
     for (const [insId, need] of insumoNeed) {
       const m = insumoMeta.get(insId)!;
@@ -418,6 +423,24 @@ export async function crearProduccionPg(params: CrearProduccionParams): Promise<
       if (upd.error) throw new Error(upd.error.message);
       m.stock = nuevoStock;
 
+      // Reflejar salida en Central (clamp a 0 igual que global).
+      let cantidadDescontadaUbic = 0;
+      if (centralUbicacionId) {
+        const stockCentralQ = await sb
+          .from("productos_stock_ubicacion")
+          .select("stock")
+          .eq("empresa_id", params.empresaId)
+          .eq("ubicacion_id", centralUbicacionId)
+          .eq("producto_id", insId)
+          .maybeSingle();
+        const stockAntes = stockCentralQ.data ? Number((stockCentralQ.data as { stock: number }).stock) : 0;
+        cantidadDescontadaUbic = Math.min(need, stockAntes);
+        if (cantidadDescontadaUbic > 0) {
+          const errAj = await ajustarStockUbicacion(sb, params.empresaId, centralUbicacionId, insId, -cantidadDescontadaUbic);
+          if (errAj) console.warn(`[produccion insumo] ajuste Central falló para ${m.nombre}: ${errAj}`);
+        }
+      }
+
       const mov = await sb.from("movimientos_inventario").insert({
         empresa_id: params.empresaId,
         producto_id: insId,
@@ -425,11 +448,13 @@ export async function crearProduccionPg(params: CrearProduccionParams): Promise<
         producto_sku: m.sku,
         tipo: "SALIDA",
         cantidad: need,
+        cantidad_descontada: cantidadDescontadaUbic,
         costo_unitario: m.costo,
         origen: "produccion",
         referencia: null,
         fecha: fechaIso,
         produccion_id: produccionId,
+        ubicacion_id: centralUbicacionId,
       });
       if (mov.error) throw new Error(mov.error.message);
     }
@@ -450,6 +475,12 @@ export async function crearProduccionPg(params: CrearProduccionParams): Promise<
       .eq("empresa_id", params.empresaId);
     if (updTerm.error) throw new Error(updTerm.error.message);
 
+    // Sumar el terminado también a Casa Central.
+    if (centralUbicacionId) {
+      const errAj = await ajustarStockUbicacion(sb, params.empresaId, centralUbicacionId, receta.productoId, cantidad);
+      if (errAj) console.warn(`[produccion terminado] alta Central falló para ${receta.productoNombre}: ${errAj}`);
+    }
+
     const movEnt = await sb.from("movimientos_inventario").insert({
       empresa_id: params.empresaId,
       producto_id: receta.productoId,
@@ -457,6 +488,7 @@ export async function crearProduccionPg(params: CrearProduccionParams): Promise<
       producto_sku: receta.productoSku,
       tipo: "ENTRADA",
       cantidad: cantidad,
+      ubicacion_id: centralUbicacionId,
       costo_unitario: costoUnitario,
       origen: "produccion",
       referencia: null,

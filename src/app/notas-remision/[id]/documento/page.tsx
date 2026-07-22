@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { fetchNR, type NotaRemision } from "@/lib/multideposito/client";
+import { EMPRESA_DOC } from "@/lib/documentos/membrete";
 
 function fmt(n: number) { return n.toLocaleString("es-PY"); }
 function fmtFecha(iso?: string | null) {
@@ -44,23 +45,51 @@ export default function DocumentoNRPage({ params }: { params: Promise<{ id: stri
   const destinoNombre = nr.destino?.nombre ?? "";
 
   return (
-    <div className="max-w-3xl mx-auto p-6 print:p-0">
+    <>
+      {/* Estilos de página A4 para impresión */}
+      <style jsx global>{`
+        @media print {
+          @page { size: A4; margin: 12mm; }
+          html, body { background: #fff !important; }
+        }
+      `}</style>
+    <div className="mx-auto p-6 print:p-0" style={{ maxWidth: "210mm" }}>
       <div className="mb-4 flex items-center justify-between print:hidden">
         <a href="/notas-remision" className="text-sm text-slate-600 hover:underline">← Volver al historial</a>
         <button onClick={() => window.print()} className="rounded-md bg-slate-800 text-white px-4 py-2 text-sm font-semibold hover:bg-slate-900">🖨️ Imprimir</button>
       </div>
 
-      <div className="bg-white border border-slate-300 rounded-lg p-8 print:border-0 print:rounded-none print:p-4">
-        <div className="flex items-start justify-between border-b-2 border-emerald-700 pb-3 mb-4">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-slate-500">Aviagro E.A.S.</p>
-            <h1 className="text-xl font-bold text-slate-900">Nota de Remisión</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Documento no fiscal — Traspaso interno de mercadería</p>
+      <div
+        className="bg-white border border-slate-300 rounded-lg p-8 print:border-0 print:rounded-none print:p-0 print:shadow-none"
+        style={{ minHeight: "270mm" }}
+      >
+        {/* Membrete: logo + datos empresa */}
+        <div className="flex items-start justify-between border-b-2 border-emerald-700 pb-3 mb-5 gap-4">
+          <div className="flex items-start gap-4 min-w-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={EMPRESA_DOC.logoUrl}
+              alt={EMPRESA_DOC.nombre}
+              style={{ maxWidth: "160px", maxHeight: "90px", width: "auto", height: "auto", objectFit: "contain" }}
+            />
+            <div className="min-w-0">
+              <p className="text-[15px] font-extrabold text-slate-900 leading-tight">{EMPRESA_DOC.nombre}</p>
+              {EMPRESA_DOC.direccion.length > 0 && (
+                <p className="text-[11px] text-slate-600">{EMPRESA_DOC.direccion.join(" · ")}</p>
+              )}
+              {EMPRESA_DOC.telefono && (
+                <p className="text-[11px] text-slate-600"><strong>Tel:</strong> {EMPRESA_DOC.telefono}</p>
+              )}
+              {EMPRESA_DOC.email && (
+                <p className="text-[11px] text-slate-600"><strong>Email:</strong> {EMPRESA_DOC.email}</p>
+              )}
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-slate-500">Número</p>
-            <p className="font-mono text-lg font-bold text-emerald-700">{nr.numero}</p>
+          <div className="text-right shrink-0">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500">Nota de Remisión</p>
+            <p className="font-mono text-xl font-bold text-emerald-700">{nr.numero}</p>
             <p className="text-[10px] text-slate-500 mt-1">Estado: <strong className="uppercase">{nr.estado}</strong></p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Documento no fiscal</p>
           </div>
         </div>
 
@@ -130,7 +159,7 @@ export default function DocumentoNRPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
-        <div className="mt-8 grid grid-cols-2 gap-8 text-xs">
+        <div className="mt-12 grid grid-cols-2 gap-12 text-xs">
           <div className="text-center border-t border-slate-400 pt-2">
             <p className="text-slate-500">Firma emisor</p>
           </div>
@@ -140,6 +169,7 @@ export default function DocumentoNRPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
     </div>
+    </>
   );
 }
 

@@ -71,6 +71,9 @@ export async function POST(
     if (nr.estado !== "pendiente") {
       return NextResponse.json(errorResponse(`NR ya está ${nr.estado}, no se puede aprobar.`), { status: 409 });
     }
+    if (nr.ubicacion_origen_id === nr.ubicacion_destino_id) {
+      return NextResponse.json(errorResponse("Origen y destino no pueden ser el mismo depósito."), { status: 400 });
+    }
 
     const itemsQ = await supabase
       .from("notas_remision_items")
@@ -113,15 +116,19 @@ export async function POST(
       }
     }
 
-    // Aplicar transferencia
+    // Aplicar transferencia con tracking para revertir si algún ítem falla.
     const nowIso = new Date().toISOString();
     const errores: string[] = [];
+    // aplicados: [productoId, ubicacionId, deltaAplicado] — para revertir todo si algo falla.
+    const aplicados: Array<{ producto_id: string; ubicacion_id: string; delta: number }> = [];
     for (const it of items) {
       const cant = Number(it.cantidad);
       const e1 = await ajustarStock(supabase, auth.empresa_id, nr.ubicacion_origen_id, it.producto_id, -cant);
-      if (e1) errores.push(`SALIDA ${it.producto_id}: ${e1}`);
+      if (e1) { errores.push(`SALIDA ${it.producto_id}: ${e1}`); break; }
+      aplicados.push({ producto_id: it.producto_id, ubicacion_id: nr.ubicacion_origen_id, delta: -cant });
       const e2 = await ajustarStock(supabase, auth.empresa_id, nr.ubicacion_destino_id, it.producto_id, cant);
-      if (e2) errores.push(`ENTRADA ${it.producto_id}: ${e2}`);
+      if (e2) { errores.push(`ENTRADA ${it.producto_id}: ${e2}`); break; }
+      aplicados.push({ producto_id: it.producto_id, ubicacion_id: nr.ubicacion_destino_id, delta: cant });
 
       const info = prodInfo.get(it.producto_id);
       const movs = [
@@ -160,7 +167,18 @@ export async function POST(
     }
 
     if (errores.length > 0) {
-      return NextResponse.json(errorResponse(`Errores parciales: ${errores.join(" | ")}`), { status: 500 });
+      // Revertir todos los ajustes aplicados (mejor esfuerzo) y borrar movimientos parciales.
+      for (const a of aplicados.slice().reverse()) {
+        await ajustarStock(supabase, auth.empresa_id, a.ubicacion_id, a.producto_id, -a.delta).catch(() => null);
+      }
+      try {
+        await supabase.from("movimientos_inventario")
+          .delete()
+          .eq("empresa_id", auth.empresa_id)
+          .eq("referencia", nr.numero)
+          .eq("origen", "nota_remision");
+      } catch {}
+      return NextResponse.json(errorResponse(`Errores parciales: ${errores.join(" | ")}. La NR queda en pendiente.`), { status: 500 });
     }
 
     // Marcar aprobada
