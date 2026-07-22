@@ -512,21 +512,11 @@ export default function NuevaVentaPage() {
   const plazoDiasNum = parseInt(plazoDias) || 0;
   // Crédito exige cliente seleccionado Y plazo/vencimiento (≥1 día). Genera cuenta por cobrar.
   const creditoValido = tipoVenta === "CONTADO" || (plazoDiasNum >= 1 && !!clienteId);
+  const documentoValido = tipoDocumento === "ticket" || !!clienteId;
+  const ventaValida   = items.length > 0 && creditoValido && documentoValido;
 
   // Cliente (opcional) — selección + filtrado del buscador.
   const clienteSel = clientes.find((c) => c.id === clienteId) ?? null;
-  // Regla fiscal: si el cliente tiene RUC o CI cargado → obligatorio factura electrónica.
-  // Si no hay cliente o el cliente no tiene datos fiscales → solo ticket.
-  const clienteTieneDatosFiscales = !!(clienteSel && (clienteSel.ruc || clienteSel.documento));
-
-  // Auto-conmutar tipo_documento según cliente
-  useEffect(() => {
-    if (clienteTieneDatosFiscales && tipoDocumento !== "factura") setTipoDocumento("factura");
-    if (!clienteTieneDatosFiscales && tipoDocumento !== "ticket") setTipoDocumento("ticket");
-  }, [clienteTieneDatosFiscales, tipoDocumento]);
-
-  const documentoValido = clienteTieneDatosFiscales ? tipoDocumento === "factura" : tipoDocumento === "ticket";
-  const ventaValida   = items.length > 0 && creditoValido && documentoValido;
   const clientesFiltrados = (clienteQuery.trim() === ""
     ? clientes
     : clientes.filter((c) => {
@@ -717,25 +707,22 @@ export default function NuevaVentaPage() {
         setErrorVenta(resultado.error);
         return;
       }
-      // Documentos de la venta. La nota de remisión se abre además del ticket
-      // SOLO si la venta la genera (cliente con usa_nota_remision o toggle activo).
       const v = resultado.venta;
       const generaNota = v.genera_nota_remision === true || !!v.nota_remision_numero;
-      const ticketUrl = `/api/ventas/${v.id}/ticket?mode=comandas&auto=1`;
-      const remisionUrl = `/api/ventas/${v.id}/ticket?tipo=remision&auto=1`;
-      // Intento de apertura automática (el ticket sale por el gesto de click; la
-      // segunda pestaña puede ser bloqueada por el navegador → fallback con botones).
-      try { window.open(ticketUrl, "_blank", "noopener"); } catch {}
-      if (generaNota) { try { window.open(remisionUrl, "_blank", "noopener"); } catch {} }
-      // Si además se generó factura electrónica, redirigir a su detalle en la misma
-      // pestaña (evita el pop-up blocker de Chrome que bloquea la 2da ventana).
+
+      // Si es factura electrónica → NO abrir ticket, ir directo al detalle de la factura.
       if (resultado.factura_id) {
         router.push(`/facturas/${resultado.factura_id}`);
         return;
       }
       if (resultado.factura_error) {
-        alert(`La venta se registró (ticket), pero NO se pudo generar la factura electrónica:\n\n${resultado.factura_error}\n\nRevisá los datos del cliente / configuración SIFEN.`);
+        alert(`La venta se registró, pero NO se pudo generar la factura electrónica:\n\n${resultado.factura_error}\n\nRevisá los datos del cliente / configuración SIFEN.`);
       }
+      // Solo si es venta ticket normal: abrir ticket (y remisión si aplica).
+      const ticketUrl = `/api/ventas/${v.id}/ticket?mode=comandas&auto=1`;
+      const remisionUrl = `/api/ventas/${v.id}/ticket?tipo=remision&auto=1`;
+      try { window.open(ticketUrl, "_blank", "noopener"); } catch {}
+      if (generaNota) { try { window.open(remisionUrl, "_blank", "noopener"); } catch {} }
       // Redirección directa a /ventas — el ticket ya se abrió en nueva pestaña.
       router.push("/ventas");
     } finally {
@@ -871,23 +858,23 @@ export default function NuevaVentaPage() {
               )}
             </div>
 
-            {/* Tipo de documento fiscal — automático según el cliente */}
+            {/* Tipo de documento fiscal */}
             <div>
               <label className={labelClass}>Documento</label>
-              {clienteTieneDatosFiscales ? (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 font-medium flex items-center gap-2">
-                  📄 Factura electrónica (obligatoria)
-                </div>
-              ) : (
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 font-medium flex items-center gap-2">
-                  🧾 Ticket
-                </div>
+              <SegmentedControl<"ticket" | "factura">
+                value={tipoDocumento}
+                options={[
+                  { value: "ticket", label: "Ticket" },
+                  { value: "factura", label: "Factura electrónica" },
+                ]}
+                onChange={(v) => setTipoDocumento(v)}
+              />
+              {tipoDocumento === "factura" && !clienteId && (
+                <p className="mt-1 text-[11px] text-red-600">La factura electrónica requiere seleccionar un cliente con RUC o cédula.</p>
               )}
-              <p className="mt-1 text-[11px] text-slate-500">
-                {clienteTieneDatosFiscales
-                  ? `Se emitirá factura electrónica SIFEN porque el cliente tiene ${clienteSel?.ruc ? "RUC" : "CI"} cargado.`
-                  : "Ticket no fiscal. Para emitir factura electrónica, elegí un cliente con RUC o CI."}
-              </p>
+              {tipoDocumento === "factura" && clienteId && (
+                <p className="mt-1 text-[11px] text-slate-500">Se generará solo la factura electrónica SIFEN (sin ticket).</p>
+              )}
             </div>
 
             {/* Condición: Contado / Crédito */}
