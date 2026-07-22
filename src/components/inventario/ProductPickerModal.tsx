@@ -141,7 +141,26 @@ export default function ProductPickerModal({
           setError(json?.error ?? "Error al buscar productos");
           setItems([]);
         } else {
-          setItems((json.data?.items ?? []) as ProductoPickerItem[]);
+          const baseItems = (json.data?.items ?? []) as ProductoPickerItem[];
+          // Multi-depósito: reemplazar stock_actual por el stock en Abasto Norte,
+          // que es el depósito desde el cual se venden todos los productos.
+          try {
+            const dr = await fetch("/api/depositos", { credentials: "include", cache: "no-store" });
+            const dj = await dr.json();
+            const abasto = ((dj?.data?.depositos ?? []) as Array<{ id: string; codigo: string }>).find((d) => d.codigo === "ABASTO-N");
+            if (abasto) {
+              const sr = await fetch(`/api/depositos/${abasto.id}/stock`, { credentials: "include", cache: "no-store" });
+              const sj = await sr.json();
+              const stockMap = new Map<string, number>();
+              for (const it of (sj?.data?.items ?? []) as Array<{ producto_id: string; stock: number }>) {
+                stockMap.set(it.producto_id, Number(it.stock) || 0);
+              }
+              for (const it of baseItems) {
+                it.stock_actual = stockMap.get(it.id) ?? 0;
+              }
+            }
+          } catch { /* fallback: mantener stock_actual global */ }
+          setItems(baseItems);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Error de red");
@@ -288,7 +307,7 @@ export default function ProductPickerModal({
                           </div>
                         ) : (
                           <div className={`text-xs tabular-nums ${sinStock ? "text-red-500" : "text-slate-500"}`}>
-                            {sinStock ? "Sin stock" : `${disp} ${p.unidad_medida}`}
+                            {sinStock ? "Sin stock en Abasto Norte" : `${disp} ${p.unidad_medida} en Abasto Norte`}
                           </div>
                         )}
                       </div>

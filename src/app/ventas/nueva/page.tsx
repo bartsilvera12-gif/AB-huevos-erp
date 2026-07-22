@@ -1199,8 +1199,8 @@ export default function NuevaVentaPage() {
             <div className="flex items-start gap-2">
               <span className="text-amber-500 text-xl leading-none">⚠</span>
               <div>
-                <h3 className="text-sm font-semibold text-slate-800">Hay productos/insumos sin stock suficiente</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Revisá el detalle. Podés vender igual: el stock quedará negativo y se registrará el movimiento de salida.</p>
+                <h3 className="text-sm font-semibold text-slate-800">Sin stock en Abasto Norte</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Los siguientes productos no tienen stock disponible en Abasto Norte. Emití una Nota de Remisión desde Casa Central para reponer, o vendé igual (queda negativo).</p>
               </div>
             </div>
 
@@ -1209,7 +1209,7 @@ export default function NuevaVentaPage() {
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 text-xs">
                     <th className="py-2 px-3 font-medium">Producto / Insumo</th>
-                    <th className="py-2 px-3 font-medium text-right">Stock actual</th>
+                    <th className="py-2 px-3 font-medium text-right">Stock en Abasto Norte</th>
                     <th className="py-2 px-3 font-medium text-right">Solicitado</th>
                     <th className="py-2 px-3 font-medium text-right">Faltante</th>
                   </tr>
@@ -1237,7 +1237,7 @@ export default function NuevaVentaPage() {
                 Cancelar
               </button>
               <button type="button" disabled={guardando} aria-busy={guardando} onClick={() => void confirmarVentaSinStock()} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                {guardando ? "Guardando…" : "Confirmar venta de todos modos"}
+                {guardando ? "Guardando…" : "Vender sin stock"}
               </button>
             </div>
           </div>

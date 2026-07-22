@@ -71,7 +71,7 @@ export default function InventarioPage() {
   // Multi-depósito: stock por producto por ubicación (para columnas extra en la tabla).
   const [depositos, setDepositos] = useState<Array<{ id: string; nombre: string; codigo: string }>>([]);
   const [stockPorProducto, setStockPorProducto] = useState<Map<string, Record<string, number>>>(new Map());
-  // Selector para elegir qué depósito ver en la tabla ("" = todos, o id específico).
+  // Selector para elegir qué depósito ver en la tabla (id de la ubicación).
   const [filtroDeposito, setFiltroDeposito] = useState<string>("");
 
   useEffect(() => {
@@ -121,7 +121,12 @@ export default function InventarioPage() {
             map.set(it.producto_id, cur);
           }
         }));
-        if (!cancelled) setStockPorProducto(map);
+        if (!cancelled) {
+          setStockPorProducto(map);
+          if (!filtroDeposito && deps.length > 0) {
+            setFiltroDeposito(deps[0].id);
+          }
+        }
       } catch { /* opcional */ }
     })();
     return () => { cancelled = true; };
@@ -512,20 +517,16 @@ export default function InventarioPage() {
         {depositos.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 mr-1">Depósito:</span>
-            <button
-              type="button"
-              onClick={() => setFiltroDeposito("")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-full transition ${filtroDeposito === "" ? "bg-slate-800 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50 bg-white"}`}
-              title="Ver todos los depósitos"
-            >
-              Todos
-            </button>
             {depositos.map((d) => (
               <button
                 key={d.id}
                 type="button"
                 onClick={() => setFiltroDeposito(d.id)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-full transition ${filtroDeposito === d.id ? "bg-emerald-600 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50 bg-white"}`}
+                className={`px-4 py-2 text-sm font-semibold rounded-lg transition ${
+                  filtroDeposito === d.id
+                    ? "bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-md ring-1 ring-emerald-500/30"
+                    : "border border-slate-200 text-slate-600 hover:bg-slate-50 bg-white"
+                }`}
               >
                 {d.nombre}
               </button>
@@ -547,8 +548,8 @@ export default function InventarioPage() {
                 {tab !== "materia" && <th className="py-3 pr-4 font-medium">Precio Venta</th>}
                 <th className="py-3 pr-4 font-medium text-center">Stock total</th>
                 {depositos.filter((d) => filtroDeposito === "" || d.id === filtroDeposito).map((d) => (
-                  <th key={d.id} className="py-3 pr-4 font-medium text-center hidden md:table-cell" title={d.nombre}>
-                    {d.nombre.length > 10 ? d.codigo || d.nombre.slice(0, 10) : d.nombre}
+                  <th key={d.id} className="py-3 pr-4 font-medium text-center hidden md:table-cell whitespace-nowrap">
+                    {d.nombre}
                   </th>
                 ))}
                 <th className="py-3 pr-4 text-center font-medium hidden lg:table-cell">Stock Mín.</th>
