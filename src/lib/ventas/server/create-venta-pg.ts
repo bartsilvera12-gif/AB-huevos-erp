@@ -163,11 +163,30 @@ export async function createVentaTransaccionalPg(
     );
   }
 
+  // Multi-depósito: la validación de stock se hace contra Abasto Norte (único punto de venta).
+  // Si Abasto Norte tiene 0, el sistema exige emitir NR desde Central antes de vender.
+  const ubicacionVentaIdValid = await getUbicacionIdByCodigo(sb, params.empresaId, "ABASTO-N");
+  const stockPorUbicacion = new Map<string, number>();
+  if (ubicacionVentaIdValid) {
+    const psuQ = await sb
+      .from("productos_stock_ubicacion")
+      .select("producto_id, stock")
+      .eq("empresa_id", params.empresaId)
+      .eq("ubicacion_id", ubicacionVentaIdValid)
+      .in("producto_id", ids);
+    if (psuQ.error) throw new Error(psuQ.error.message);
+    for (const r of (psuQ.data ?? []) as Array<{ producto_id: string; stock: number }>) {
+      stockPorUbicacion.set(r.producto_id, Number(r.stock) || 0);
+    }
+  }
+
   type ProdMeta = { stock: number; costo: number; nombre: string; sku: string; controlaStock: boolean; modo: string };
   const stockMap = new Map<string, ProdMeta>();
   for (const r of prodRows) {
+    // Si no hay fila en productos_stock_ubicacion para Abasto Norte → stock 0 (nada disponible para vender).
+    const stockAbasto = stockPorUbicacion.get(r.id) ?? 0;
     stockMap.set(r.id, {
-      stock: Number(r.stock_actual),
+      stock: stockAbasto,
       costo: Number(r.costo_promedio),
       nombre: r.nombre,
       sku: r.sku,
@@ -260,9 +279,23 @@ export async function createVentaTransaccionalPg(
         const faltan = insumoIds.filter((i) => !found.has(i));
         throw new Error(`La receta referencia insumos inexistentes en esta empresa: ${faltan.join(", ")}`);
       }
+      // Multi-depósito: para insumos también validar contra Abasto Norte.
+      const insumoStockAbasto = new Map<string, number>();
+      if (ubicacionVentaIdValid) {
+        const iQ = await sb
+          .from("productos_stock_ubicacion")
+          .select("producto_id, stock")
+          .eq("empresa_id", params.empresaId)
+          .eq("ubicacion_id", ubicacionVentaIdValid)
+          .in("producto_id", insumoIds);
+        if (iQ.error) throw new Error(iQ.error.message);
+        for (const r of (iQ.data ?? []) as Array<{ producto_id: string; stock: number }>) {
+          insumoStockAbasto.set(r.producto_id, Number(r.stock) || 0);
+        }
+      }
       for (const r of insRows) {
         insumoMeta.set(r.id, {
-          stock: Number(r.stock_actual),
+          stock: insumoStockAbasto.get(r.id) ?? 0,
           costo: Number(r.costo_promedio),
           nombre: r.nombre,
           sku: r.sku,

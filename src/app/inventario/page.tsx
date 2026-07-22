@@ -68,6 +68,10 @@ export default function InventarioPage() {
   const [cargandoLista,    setCargandoLista]     = useState(true);
   const [soloStockBajo,    setSoloStockBajo]    = useState(false);
 
+  // Multi-depósito: stock por producto por ubicación (para columnas extra en la tabla).
+  const [depositos, setDepositos] = useState<Array<{ id: string; nombre: string; codigo: string }>>([]);
+  const [stockPorProducto, setStockPorProducto] = useState<Map<string, Record<string, number>>>(new Map());
+
   useEffect(() => {
     let cancelled = false;
     setCargandoLista(true);
@@ -95,6 +99,29 @@ export default function InventarioPage() {
         setCategorias(rows.map((c) => ({ id: c.id, nombre: c.nombre })));
       })
       .catch(() => undefined);
+    // Multi-depósito: cargar depósitos y stock por ubicación
+    (async () => {
+      try {
+        const dr = await fetch("/api/depositos", { cache: "no-store" });
+        const dj = await dr.json();
+        if (cancelled || !dj?.success) return;
+        const deps = (dj.data?.depositos ?? []) as Array<{ id: string; nombre: string; codigo: string }>;
+        setDepositos(deps.map((d) => ({ id: d.id, nombre: d.nombre, codigo: d.codigo })));
+        const map = new Map<string, Record<string, number>>();
+        await Promise.all(deps.map(async (d) => {
+          const sr = await fetch(`/api/depositos/${d.id}/stock`, { cache: "no-store" });
+          const sj = await sr.json();
+          if (!sj?.success) return;
+          const items = (sj.data?.items ?? []) as Array<{ producto_id: string; stock: number }>;
+          for (const it of items) {
+            const cur = map.get(it.producto_id) ?? {};
+            cur[d.id] = Number(it.stock) || 0;
+            map.set(it.producto_id, cur);
+          }
+        }));
+        if (!cancelled) setStockPorProducto(map);
+      } catch { /* opcional */ }
+    })();
     return () => { cancelled = true; };
   }, [refreshKey]);
 
@@ -492,7 +519,12 @@ export default function InventarioPage() {
                 <th className="hidden py-3 pr-4 font-medium lg:table-cell">SKU</th>
                 <th className="py-3 pr-4 font-medium">Costo Prom.</th>
                 {tab !== "materia" && <th className="py-3 pr-4 font-medium">Precio Venta</th>}
-                <th className="py-3 pr-4 font-medium text-center">Stock actual</th>
+                <th className="py-3 pr-4 font-medium text-center">Stock total</th>
+                {depositos.map((d) => (
+                  <th key={d.id} className="py-3 pr-4 font-medium text-center hidden md:table-cell" title={d.nombre}>
+                    {d.nombre.length > 10 ? d.codigo || d.nombre.slice(0, 10) : d.nombre}
+                  </th>
+                ))}
                 <th className="py-3 pr-4 text-center font-medium hidden lg:table-cell">Stock Mín.</th>
                 <th className="py-3 pr-4 font-medium hidden lg:table-cell">Ubicación</th>
                 <th className="py-3 pr-4 font-medium hidden lg:table-cell">Valuación</th>
@@ -542,6 +574,20 @@ export default function InventarioPage() {
                         </span>
                       )}
                     </td>
+                    {depositos.map((d) => {
+                      const stockDep = stockPorProducto.get(p.id)?.[d.id] ?? 0;
+                      return (
+                        <td key={d.id} className="py-4 pr-4 text-center hidden md:table-cell">
+                          {sinControl ? (
+                            <span className="text-xs text-gray-300">—</span>
+                          ) : (
+                            <span className={`tabular-nums text-sm ${stockDep > 0 ? "text-slate-700" : "text-slate-300"}`}>
+                              {formatStock(stockDep)}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
                     <td className="py-4 pr-4 text-center text-gray-500 hidden lg:table-cell">
                       {sinControl ? "—" : <span className="tabular-nums">{formatStock(p.stock_minimo)}</span>}
                     </td>
