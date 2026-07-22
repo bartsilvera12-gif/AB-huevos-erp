@@ -139,7 +139,7 @@ export default function NuevaVentaPage() {
   const [plazoDias, setPlazoDias] = useState("");
 
   // Cliente (opcional). Si se selecciona, se envía cliente_id al crear la venta.
-  type ClienteLite = { id: string; label: string; ruc: string | null; usa_nota_remision: boolean };
+  type ClienteLite = { id: string; label: string; ruc: string | null; documento: string | null; usa_nota_remision: boolean };
   const [clientes, setClientes] = useState<ClienteLite[]>([]);
   const [clienteId, setClienteId] = useState("");
   const [clienteQuery, setClienteQuery] = useState("");
@@ -228,6 +228,7 @@ export default function NuevaVentaPage() {
         id: nuevoId,
         label: s(nuevo.empresa) || s(nuevo.nombre_contacto) || nombreContacto,
         ruc: s(nuevo.ruc) || null,
+        documento: s(nuevo.documento) || null,
         usa_nota_remision: nuevo.usa_nota_remision === true,
       };
       setClientes((prev) => [lite, ...prev]);
@@ -433,6 +434,7 @@ export default function NuevaVentaPage() {
           id: String(r.id),
           label: s(r.empresa) || s(r.nombre_contacto) || s(r.nombre) || "Cliente",
           ruc: s(r.ruc) || null,
+          documento: s(r.documento) || null,
           usa_nota_remision: r.usa_nota_remision === true,
         }));
         setClientes(lite);
@@ -510,11 +512,21 @@ export default function NuevaVentaPage() {
   const plazoDiasNum = parseInt(plazoDias) || 0;
   // Crédito exige cliente seleccionado Y plazo/vencimiento (≥1 día). Genera cuenta por cobrar.
   const creditoValido = tipoVenta === "CONTADO" || (plazoDiasNum >= 1 && !!clienteId);
-  const documentoValido = tipoDocumento === "ticket" || !!clienteId;
-  const ventaValida   = items.length > 0 && creditoValido && documentoValido;
 
   // Cliente (opcional) — selección + filtrado del buscador.
   const clienteSel = clientes.find((c) => c.id === clienteId) ?? null;
+  // Regla fiscal: si el cliente tiene RUC o CI cargado → obligatorio factura electrónica.
+  // Si no hay cliente o el cliente no tiene datos fiscales → solo ticket.
+  const clienteTieneDatosFiscales = !!(clienteSel && (clienteSel.ruc || clienteSel.documento));
+
+  // Auto-conmutar tipo_documento según cliente
+  useEffect(() => {
+    if (clienteTieneDatosFiscales && tipoDocumento !== "factura") setTipoDocumento("factura");
+    if (!clienteTieneDatosFiscales && tipoDocumento !== "ticket") setTipoDocumento("ticket");
+  }, [clienteTieneDatosFiscales, tipoDocumento]);
+
+  const documentoValido = clienteTieneDatosFiscales ? tipoDocumento === "factura" : tipoDocumento === "ticket";
+  const ventaValida   = items.length > 0 && creditoValido && documentoValido;
   const clientesFiltrados = (clienteQuery.trim() === ""
     ? clientes
     : clientes.filter((c) => {
@@ -859,23 +871,23 @@ export default function NuevaVentaPage() {
               )}
             </div>
 
-            {/* Tipo de documento fiscal */}
+            {/* Tipo de documento fiscal — automático según el cliente */}
             <div>
               <label className={labelClass}>Documento</label>
-              <SegmentedControl<"ticket" | "factura">
-                value={tipoDocumento}
-                options={[
-                  { value: "ticket", label: "Ticket" },
-                  { value: "factura", label: "Factura electrónica" },
-                ]}
-                onChange={(v) => setTipoDocumento(v)}
-              />
-              {tipoDocumento === "factura" && !clienteId && (
-                <p className="mt-1 text-[11px] text-red-600">La factura electrónica requiere seleccionar un cliente con RUC o cédula.</p>
+              {clienteTieneDatosFiscales ? (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 font-medium flex items-center gap-2">
+                  📄 Factura electrónica (obligatoria)
+                </div>
+              ) : (
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 font-medium flex items-center gap-2">
+                  🧾 Ticket
+                </div>
               )}
-              {tipoDocumento === "factura" && clienteId && (
-                <p className="mt-1 text-[11px] text-slate-500">Se generará una factura electrónica SIFEN al cliente seleccionado.</p>
-              )}
+              <p className="mt-1 text-[11px] text-slate-500">
+                {clienteTieneDatosFiscales
+                  ? `Se emitirá factura electrónica SIFEN porque el cliente tiene ${clienteSel?.ruc ? "RUC" : "CI"} cargado.`
+                  : "Ticket no fiscal. Para emitir factura electrónica, elegí un cliente con RUC o CI."}
+              </p>
             </div>
 
             {/* Condición: Contado / Crédito */}
