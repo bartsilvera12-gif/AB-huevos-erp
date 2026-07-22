@@ -542,10 +542,17 @@ export async function createVentaTransaccionalPg(
       if (upd.error) throw new Error(upd.error.message);
       p.stock = nuevoStock;
 
-      // Multi-depósito: reflejar salida en productos_stock_ubicacion (Abasto Norte)
+      // Multi-depósito: reflejar salida en productos_stock_ubicacion (Abasto Norte).
+      // Capamos en 0 (mismo comportamiento que el stock global): si vendieron sin stock,
+      // el movimiento SALIDA registra la cantidad real, pero el stock por ubicación no baja de 0.
       if (ubicacionVentaId) {
-        const errAju = await ajustarStockUbicacion(sb, params.empresaId, ubicacionVentaId, line.producto_id, -line.cantidad);
-        if (errAju) console.warn(`[venta] ajuste stock Abasto Norte falló para ${line.producto_nombre}: ${errAju}`);
+        const stockAntes = stockPorUbicacion.get(line.producto_id) ?? 0;
+        const deltaClamped = -Math.min(line.cantidad, stockAntes);
+        if (deltaClamped !== 0) {
+          const errAju = await ajustarStockUbicacion(sb, params.empresaId, ubicacionVentaId, line.producto_id, deltaClamped);
+          if (errAju) console.warn(`[venta] ajuste stock Abasto Norte falló para ${line.producto_nombre}: ${errAju}`);
+          else stockPorUbicacion.set(line.producto_id, stockAntes + deltaClamped);
+        }
       }
 
       const mov = await sb.from("movimientos_inventario").insert({
@@ -579,10 +586,22 @@ export async function createVentaTransaccionalPg(
       if (upd.error) throw new Error(upd.error.message);
       m.stock = nuevoStock;
 
-      // Multi-depósito: insumo también se descuenta de Abasto Norte
+      // Multi-depósito: insumo también se descuenta de Abasto Norte (clampeado en 0)
       if (ubicacionVentaId) {
-        const errAju = await ajustarStockUbicacion(sb, params.empresaId, ubicacionVentaId, insId, -need);
-        if (errAju) console.warn(`[venta insumo] ajuste stock Abasto Norte falló para ${m.nombre}: ${errAju}`);
+        // Leer stock actual del insumo en Abasto Norte para clampear
+        const insQuery = await sb
+          .from("productos_stock_ubicacion")
+          .select("stock")
+          .eq("empresa_id", params.empresaId)
+          .eq("ubicacion_id", ubicacionVentaId)
+          .eq("producto_id", insId)
+          .maybeSingle();
+        const stockAntes = insQuery.data ? Number((insQuery.data as { stock: number }).stock) : 0;
+        const deltaClamped = -Math.min(need, stockAntes);
+        if (deltaClamped !== 0) {
+          const errAju = await ajustarStockUbicacion(sb, params.empresaId, ubicacionVentaId, insId, deltaClamped);
+          if (errAju) console.warn(`[venta insumo] ajuste stock Abasto Norte falló para ${m.nombre}: ${errAju}`);
+        }
       }
 
       const mov = await sb.from("movimientos_inventario").insert({
