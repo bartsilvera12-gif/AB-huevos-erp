@@ -1949,6 +1949,31 @@ function getInitialTab(): TabDash {
 }
 
 export default function DashboardPage() {
+  // Redirigir a /inventario si el usuario no tiene el módulo dashboard habilitado
+  // (perfiles operativos como producción/clasificación que no ven el dashboard).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetchWithSupabaseSession("/api/auth/empresa-context", { cache: "no-store" });
+        if (!r.ok) return;
+        const body = (await r.json()) as { superAdmin?: boolean; modulos?: Array<{ slug?: string }> };
+        if (cancelled) return;
+        if (body.superAdmin) return;
+        const slugs = new Set((body.modulos ?? []).map((m) => (m.slug ?? "").trim()).filter(Boolean));
+        if (slugs.size === 0) return; // sin datos aún — no redirigir
+        if (!slugs.has("dashboard")) {
+          const dest = slugs.has("inventario") ? "/inventario"
+            : slugs.has("galpones") ? "/galpones"
+            : slugs.has("clasificacion_huevos") ? "/clasificacion"
+            : "/inventario";
+          window.location.replace(dest);
+        }
+      } catch { /* ignorar */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const [dashScope, setDashScope] = useState<DashScope>({ kind: "pending" });
   const [tab,      setTab]      = useState<TabDash>(getInitialTab);
   const [periodo,  setPeriodo]  = useState<Periodo>("mes");
