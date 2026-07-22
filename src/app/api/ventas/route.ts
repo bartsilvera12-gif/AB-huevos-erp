@@ -114,6 +114,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Nombre del cliente (para mostrar en la lista sin doble request desde el front).
+    const clienteIds = Array.from(new Set(
+      ventasRows.map((r) => (r as unknown as { cliente_id?: string | null }).cliente_id).filter((x): x is string => !!x)
+    ));
+    const nombrePorCliente = new Map<string, string>();
+    if (clienteIds.length > 0) {
+      const cQ = await ctx.supabase
+        .from("clientes")
+        .select("id, nombre, empresa")
+        .eq("empresa_id", empresaId)
+        .in("id", clienteIds);
+      if (!cQ.error) {
+        for (const c of (cQ.data ?? []) as Array<{ id: string; nombre: string | null; empresa: string | null }>) {
+          const nombre = (c.empresa && c.empresa.trim()) || (c.nombre && c.nombre.trim()) || "";
+          if (nombre) nombrePorCliente.set(c.id, nombre);
+        }
+      }
+    }
+
     const byVenta = new Map<string, VentaItemRow[]>();
     for (const row of itemsRows) {
       const list = byVenta.get(row.venta_id) ?? [];
@@ -148,6 +167,10 @@ export async function GET(request: NextRequest) {
         anulada_at: (r as unknown as { anulada_at?: string | null }).anulada_at ?? null,
         anulada_motivo: (r as unknown as { anulada_motivo?: string | null }).anulada_motivo ?? null,
         cliente_id: (r as unknown as { cliente_id?: string | null }).cliente_id ?? null,
+        cliente_nombre: (() => {
+          const cid = (r as unknown as { cliente_id?: string | null }).cliente_id;
+          return cid ? nombrePorCliente.get(cid) ?? null : null;
+        })(),
         factura_id: (r as unknown as { factura_id?: string | null }).factura_id ?? null,
         tipo_documento: (((r as unknown as { tipo_documento?: string }).tipo_documento === "factura") ? "factura" : "ticket") as "ticket" | "factura",
         factura_estado_sifen: (() => {

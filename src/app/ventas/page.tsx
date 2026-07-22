@@ -391,11 +391,11 @@ export default function VentasPage() {
                     <React.Fragment key={v.id}>
                     <tr className={`border-b border-slate-200 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors ${v.anulada ? "opacity-60" : ""} ${isExpanded ? "bg-[#4FAEB2]/[0.04]" : ""}`}>
                       <td className="py-4 pr-4 font-mono text-xs text-gray-500 align-middle">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-start gap-2">
                           <button
                             type="button"
                             onClick={() => setExpandedId(isExpanded ? null : v.id)}
-                            className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                            className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
                             aria-label={isExpanded ? "Ocultar detalle" : "Ver detalle"}
                             aria-expanded={isExpanded}
                           >
@@ -403,12 +403,19 @@ export default function VentasPage() {
                               <path fillRule="evenodd" d="M7.21 5.23a.75.75 0 011.06.02l4.25 4.25a.75.75 0 010 1.06L8.27 14.75a.75.75 0 01-1.08-1.04L10.94 10 7.19 6.29a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                             </svg>
                           </button>
-                          <span className={v.anulada ? "line-through" : ""}>{v.numero_control}</span>
-                          {v.anulada && (
-                            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700">
-                              Anulada
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={v.anulada ? "line-through" : ""}>{v.numero_control}</span>
+                              {v.anulada && (
+                                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700">
+                                  Anulada
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-sans text-[11px] text-slate-500 truncate max-w-[180px]" title={v.cliente_nombre ?? undefined}>
+                              {v.cliente_nombre ?? (v.cliente_id ? "Cliente" : "Sin cliente")}
                             </span>
-                          )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-4 pr-4 align-middle">
@@ -535,8 +542,16 @@ export default function VentasPage() {
                       <tr className="border-b border-slate-200 bg-slate-50/60">
                         <td colSpan={11} className="px-4 py-3">
                           <div className="rounded-lg border border-slate-200 bg-white p-3">
-                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                              Detalle de la venta ({v.items.length} {v.items.length === 1 ? "ítem" : "ítems"})
+                            <div className="mb-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Detalle de la venta ({v.items.length} {v.items.length === 1 ? "ítem" : "ítems"})
+                              </span>
+                              <span className="text-xs text-slate-600">
+                                <span className="text-slate-400">Cliente:</span>{" "}
+                                <span className="font-medium text-slate-700">
+                                  {v.cliente_nombre ?? (v.cliente_id ? "Cliente" : "Sin cliente")}
+                                </span>
+                              </span>
                             </div>
                             <div className="overflow-x-auto">
                               <table className="w-full text-left text-xs">

@@ -51,6 +51,8 @@ export interface Venta {
 
   /** UUID del cliente asociado (nullable si venta sin cliente). */
   cliente_id?: string | null;
+  /** Nombre del cliente (empresa/razón social o nombre) resuelto en la API GET. */
+  cliente_nombre?: string | null;
 
   /** UUID de la factura fiscal generada (nullable si venta es solo ticket). */
   factura_id?: string | null;
