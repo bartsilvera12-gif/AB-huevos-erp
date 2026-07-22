@@ -143,7 +143,10 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
         inactiveSlugs: access.inactiveSlugs,
         strict: access.strict,
       });
-      if (fallback && fallback !== pathname && (slug === "dashboard" || pathname === "/")) {
+      // Nunca mandar a /login desde acá: si no hay ningún módulo accesible,
+      // preferimos mostrar la pantalla de bloqueo (sin loop) en vez de
+      // rebotar al login y crear un ciclo.
+      if (fallback && fallback !== "/login" && fallback !== pathname && (slug === "dashboard" || pathname === "/")) {
         router.replace(fallback);
         setBlockedSlug(null);
         return;
