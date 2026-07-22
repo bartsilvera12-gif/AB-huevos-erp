@@ -546,8 +546,11 @@ export function buildOfficialRdeFacturaElectronicaXml(
   } else {
     const doc = (receptor.documento ?? "").replace(/\s/g, "").trim();
     if (!doc) throw new Error("Receptor sin RUC: se requiere documento (CI) en cliente.");
+    // Consumidor final paraguayo: no contribuyente (iNatRec=2) + B2C (iTiOpe=2).
+    // Usar iTiOpe=1 (B2B) con iNatRec=2 es incoherente y SIFEN lo rechaza
+    // ("El tipo de operación no compatible con la naturaleza del receptor").
     recParts.push(textEl("iNatRec", "2"));
-    recParts.push(textEl("iTiOpe", "1"));
+    recParts.push(textEl("iTiOpe", "2"));
     recParts.push(textEl("cPaisRec", "PRY"));
     recParts.push(textEl("dDesPaisRe", "Paraguay"));
     recParts.push(textEl("iTipIDRec", "1"));
