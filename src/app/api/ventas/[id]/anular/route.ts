@@ -44,10 +44,13 @@ export async function POST(
     }
     const numeroControl = (vQ.data as { numero_control: string }).numero_control;
 
-    // Movimientos SALIDA originales de la venta
+    // Movimientos SALIDA originales de la venta.
+    // - cantidad = lo que registra la venta a nivel global (para trazabilidad).
+    // - cantidad_descontada = lo que realmente salió de la ubicación (puede ser 0 si
+    //   la venta fue "sin stock" y se clampeó). Fallback a cantidad para movimientos legacy.
     const movQ = await sb
       .from("movimientos_inventario")
-      .select("id, producto_id, producto_nombre, producto_sku, cantidad, costo_unitario")
+      .select("id, producto_id, producto_nombre, producto_sku, cantidad, cantidad_descontada, costo_unitario")
       .eq("empresa_id", empresaId)
       .eq("venta_id", id)
       .eq("tipo", "SALIDA");
@@ -58,18 +61,24 @@ export async function POST(
       producto_nombre: string | null;
       producto_sku: string | null;
       cantidad: number;
+      cantidad_descontada: number | null;
       costo_unitario: number | null;
     }>;
 
     const nowIso = new Date().toISOString();
 
-    // Revertir stock producto por producto (acumular por producto por si hay varias líneas)
+    // Revertir stock global (usa cantidad porque el stock global también se clampeó a 0
+    // durante la venta, pero la anulación restaura el estado teórico previo a la venta).
     const stockDelta = new Map<string, number>();
+    // Y en paralelo, cuánto devolver a la ubicación (usa cantidad_descontada real).
+    const stockDeltaUbic = new Map<string, number>();
     for (const m of movs) {
       stockDelta.set(m.producto_id, (stockDelta.get(m.producto_id) ?? 0) + Number(m.cantidad));
+      const desc = m.cantidad_descontada != null ? Number(m.cantidad_descontada) : Number(m.cantidad);
+      stockDeltaUbic.set(m.producto_id, (stockDeltaUbic.get(m.producto_id) ?? 0) + desc);
     }
 
-    // Multi-depósito: devolver stock a Abasto Norte también
+    // Multi-depósito: devolver a Abasto Norte SOLO lo que realmente se descontó de ahí.
     const ubicacionVentaId = await getUbicacionIdByCodigo(sb, empresaId, "ABASTO-N");
 
     for (const [productoId, delta] of stockDelta) {
@@ -91,13 +100,17 @@ export async function POST(
       if (upd.error) throw new Error(upd.error.message);
 
       if (ubicacionVentaId) {
-        const errAju = await ajustarStockUbicacion(sb, empresaId, ubicacionVentaId, productoId, delta);
-        if (errAju) console.warn(`[anular] ajuste stock Abasto Norte falló para ${productoId}: ${errAju}`);
+        const deltaUbic = stockDeltaUbic.get(productoId) ?? 0;
+        if (deltaUbic > 0) {
+          const errAju = await ajustarStockUbicacion(sb, empresaId, ubicacionVentaId, productoId, deltaUbic);
+          if (errAju) console.warn(`[anular] ajuste stock Abasto Norte falló para ${productoId}: ${errAju}`);
+        }
       }
     }
 
     // Insertar movimientos ENTRADA de reversión (uno por cada SALIDA original)
     for (const m of movs) {
+      const devueltoUbic = m.cantidad_descontada != null ? Number(m.cantidad_descontada) : Number(m.cantidad);
       const ins = await sb.from("movimientos_inventario").insert({
         empresa_id: empresaId,
         producto_id: m.producto_id,
@@ -105,6 +118,7 @@ export async function POST(
         producto_sku: m.producto_sku,
         tipo: "ENTRADA",
         cantidad: m.cantidad,
+        cantidad_descontada: devueltoUbic,
         costo_unitario: m.costo_unitario ?? 0,
         origen: "venta_anulada",
         referencia: `ANUL-${numeroControl}`,
