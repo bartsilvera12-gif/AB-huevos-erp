@@ -56,6 +56,8 @@ export interface Venta {
   factura_id?: string | null;
   /** Estado SIFEN de la factura: borrador | generado | enviado | aprobado | rechazado | cancelado. */
   factura_estado_sifen?: string | null;
+  /** Tipo de documento: 'ticket' (no fiscal) o 'factura' (electrónica). */
+  tipo_documento?: "ticket" | "factura";
 
   /** Anulación (soft): la venta se contabiliza pero no cuenta en KPIs de venta neta. */
   anulada?: boolean;

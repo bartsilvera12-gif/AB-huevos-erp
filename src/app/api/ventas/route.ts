@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     let ventasQ: any = await ctx.supabase
       .from("ventas")
       .select(
-        "id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva, total, tipo_venta, plazo_dias, metodo_pago, fecha, genera_nota_remision, nota_remision_numero, anulada, anulada_at, anulada_motivo, cliente_id, factura_id"
+        "id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva, total, tipo_venta, plazo_dias, metodo_pago, fecha, genera_nota_remision, nota_remision_numero, anulada, anulada_at, anulada_motivo, cliente_id, factura_id, tipo_documento"
       )
       .eq("empresa_id", empresaId)
       .order("fecha", { ascending: false })
@@ -149,6 +149,7 @@ export async function GET(request: NextRequest) {
         anulada_motivo: (r as unknown as { anulada_motivo?: string | null }).anulada_motivo ?? null,
         cliente_id: (r as unknown as { cliente_id?: string | null }).cliente_id ?? null,
         factura_id: (r as unknown as { factura_id?: string | null }).factura_id ?? null,
+        tipo_documento: (((r as unknown as { tipo_documento?: string }).tipo_documento === "factura") ? "factura" : "ticket") as "ticket" | "factura",
         factura_estado_sifen: (() => {
           const fid = (r as unknown as { factura_id?: string | null }).factura_id;
           return fid ? estadoPorFactura.get(fid) ?? null : null;

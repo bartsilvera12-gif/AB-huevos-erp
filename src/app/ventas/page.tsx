@@ -367,6 +367,7 @@ export default function VentasPage() {
                 <th className="py-3 pr-4 font-medium hidden lg:table-cell">IVA</th>
                 <th className="py-3 pr-4 font-medium text-right">Total</th>
                 <th className="hidden py-3 pr-4 font-medium lg:table-cell">Tipo</th>
+                <th className="py-3 pr-4 font-medium text-center">Doc.</th>
                 <th className="hidden py-3 pr-4 font-medium lg:table-cell">Pago</th>
                 <th className="py-3 pr-4 font-medium">Fecha</th>
                 <th className="py-3 font-medium text-center">Ticket</th>
@@ -421,6 +422,26 @@ export default function VentasPage() {
                             ? "Contado"
                             : `Crédito ${v.plazo_dias ?? ""}d`}
                         </span>
+                      </td>
+                      <td className="py-4 pr-4 text-center align-middle">
+                        {v.tipo_documento === "factura" ? (
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide border ${
+                              v.factura_estado_sifen === "aprobado"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : v.factura_estado_sifen === "rechazado"
+                                ? "bg-rose-50 text-rose-800 border-rose-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200"
+                            }`}
+                            title={`Factura ${v.factura_estado_sifen ?? "pendiente"}`}
+                          >
+                            📄 Factura
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                            🧾 Ticket
+                          </span>
+                        )}
                       </td>
                       <td className="hidden py-4 pr-4 align-middle text-xs text-gray-600 lg:table-cell">
                         {v.metodo_pago === "tarjeta" ? "Tarjeta"
