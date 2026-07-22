@@ -144,6 +144,7 @@ export async function POST(request: NextRequest) {
         ? null
         : String(o.observaciones).slice(0, 4000);
     const permitirSinStock = o.permitir_sin_stock === true;
+    const traerDesdeCentral = o.traer_desde_central === true;
     // Pedido (proyecto) que se está facturando desde Caja. Opcional.
     const pedidoId = typeof o.pedido_id === "string" && o.pedido_id.trim() ? o.pedido_id.trim() : null;
 
@@ -268,6 +269,7 @@ export async function POST(request: NextRequest) {
       totalDeclarado,
       pedidoCocina,
       permitirSinStock,
+      traerDesdeCentral,
       generaNotaRemision: o.genera_nota_remision === true,
       tipoDocumento,
     });

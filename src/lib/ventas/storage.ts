@@ -10,6 +10,8 @@ export type FaltanteStock = {
   stock_actual: number;
   solicitado: number;
   faltante: number;
+  /** Stock disponible en Casa Central (para ofrecer "traer desde Central"). */
+  stock_central?: number;
 };
 
 export type ResultadoGuardarVenta =
@@ -65,7 +67,7 @@ export async function saveVenta(
   datos: Omit<Venta, "id" | "numero_control" | "fecha"> & { cliente_id?: string | null; genera_nota_remision?: boolean; tipo_documento?: "ticket" | "factura" },
   pedidoCocina?: PedidoCocinaInput,
   pagoDetalle?: PagoDetalleInput | null,
-  opts?: { permitirSinStock?: boolean; pedidoId?: string | null }
+  opts?: { permitirSinStock?: boolean; pedidoId?: string | null; traerDesdeCentral?: boolean }
 ): Promise<ResultadoGuardarVenta> {
   if (!datos.items || datos.items.length === 0) {
     return { success: false, error: "La venta debe tener al menos un producto." };
@@ -90,6 +92,7 @@ export async function saveVenta(
         pedido_cocina: pedidoCocina ?? null,
         pago_detalle: pagoDetalle ?? null,
         permitir_sin_stock: opts?.permitirSinStock === true,
+        traer_desde_central: opts?.traerDesdeCentral === true,
         genera_nota_remision: datos.genera_nota_remision === true,
         tipo_documento: datos.tipo_documento === "factura" ? "factura" : "ticket",
         pedido_id: opts?.pedidoId ?? null,

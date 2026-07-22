@@ -12,6 +12,8 @@ export interface FaltanteStock {
   stock_actual: number;
   solicitado: number;
   faltante: number;
+  /** Cuánto hay en Casa Central (para ofrecer "traer desde Central"). */
+  stock_central?: number;
 }
 
 /**
@@ -70,6 +72,8 @@ export interface CreateVentaPgParams {
   pedidoCocina?: CreateVentaPedidoCocinaInput | null;
   /** Si true, autoriza vender aunque falte stock de productos o insumos (stock puede quedar negativo). */
   permitirSinStock?: boolean;
+  /** Si true, ante faltantes en Abasto Norte, auto-emitir NR desde Casa Central y aprobarla en el momento. */
+  traerDesdeCentral?: boolean;
   /** Si true y hay cliente, la venta emite nota de remisión (documento NO fiscal) con número NR-XXXXXX. */
   generaNotaRemision?: boolean;
   /** Tipo de documento fiscal: 'ticket' (default) o 'factura' (electrónica, requiere cliente). */
@@ -193,6 +197,53 @@ export async function createVentaTransaccionalPg(
       controlaStock: r.controla_stock !== false,
       modo: r.modo_receta ?? "preparado_al_vender",
     });
+  }
+
+  // 2c) Multi-depósito: cargar stock en Casa Central para ofrecer "traer desde Central" al UI
+  //     y, si `traerDesdeCentral=true`, ejecutar la transferencia atómica antes de validar.
+  const centralUbicacionId = await getUbicacionIdByCodigo(sb, params.empresaId, "CENTRAL");
+  const stockCentralPorProducto = new Map<string, number>();
+  if (centralUbicacionId) {
+    const cQ = await sb
+      .from("productos_stock_ubicacion")
+      .select("producto_id, stock")
+      .eq("empresa_id", params.empresaId)
+      .eq("ubicacion_id", centralUbicacionId)
+      .in("producto_id", ids);
+    if (cQ.error) throw new Error(cQ.error.message);
+    for (const r of (cQ.data ?? []) as Array<{ producto_id: string; stock: number }>) {
+      stockCentralPorProducto.set(r.producto_id, Number(r.stock) || 0);
+    }
+  }
+  // Registro de transferencias auto-ejecutadas para trazabilidad post-venta.
+  const transferenciasAutoDesdeCentral: Array<{ producto_id: string; cantidad: number; producto_nombre: string; producto_sku: string | null }> = [];
+  if (params.traerDesdeCentral && centralUbicacionId && ubicacionVentaIdValid) {
+    for (const it of items) {
+      const abastoStock = stockPorUbicacion.get(it.producto_id) ?? 0;
+      const need = it.cantidad;
+      if (need > abastoStock) {
+        const faltante = need - abastoStock;
+        const centralStock = stockCentralPorProducto.get(it.producto_id) ?? 0;
+        const transferir = Math.min(faltante, centralStock);
+        if (transferir > 0) {
+          const meta = stockMap.get(it.producto_id);
+          const errOut = await ajustarStockUbicacion(sb, params.empresaId, centralUbicacionId, it.producto_id, -transferir);
+          if (errOut) throw new Error(`Transferencia Central→Abasto Norte falló (SALIDA Central): ${errOut}`);
+          const errIn = await ajustarStockUbicacion(sb, params.empresaId, ubicacionVentaIdValid, it.producto_id, transferir);
+          if (errIn) throw new Error(`Transferencia Central→Abasto Norte falló (ENTRADA Abasto Norte): ${errIn}`);
+          // Actualizar maps in-memory para que el resto de la validación vea el stock nuevo
+          stockPorUbicacion.set(it.producto_id, abastoStock + transferir);
+          stockCentralPorProducto.set(it.producto_id, centralStock - transferir);
+          if (meta) meta.stock = abastoStock + transferir;
+          transferenciasAutoDesdeCentral.push({
+            producto_id: it.producto_id,
+            cantidad: transferir,
+            producto_nombre: meta?.nombre ?? "?",
+            producto_sku: meta?.sku ?? null,
+          });
+        }
+      }
+    }
   }
 
   // 2b) Recetas: para cada producto vendido con receta activa, calcular el consumo de
@@ -349,6 +400,7 @@ export async function createVentaTransaccionalPg(
       faltantes.push({
         tipo: "producto", producto_id: pid, nombre: p.nombre, sku: p.sku,
         stock_actual: p.stock, solicitado: need, faltante: Math.round((need - p.stock) * 1e6) / 1e6,
+        stock_central: stockCentralPorProducto.get(pid) ?? 0,
       });
     }
   }
@@ -360,6 +412,7 @@ export async function createVentaTransaccionalPg(
       faltantes.push({
         tipo: "insumo", producto_id: insId, nombre: m.nombre, sku: m.sku,
         stock_actual: m.stock, solicitado: need, faltante: Math.round((need - m.stock) * 1e6) / 1e6,
+        stock_central: stockCentralPorProducto.get(insId) ?? 0,
       });
     }
   }
@@ -375,6 +428,13 @@ export async function createVentaTransaccionalPg(
       .map((f) => `${f.nombre} (stock ${f.stock_actual}, pedido ${f.solicitado}, falta ${f.faltante})`)
       .join("; ");
     const nota = `Venta con stock insuficiente autorizada: ${detalle}`;
+    observacionesFinal = (observacionesFinal ? `${observacionesFinal} | ${nota}` : nota).slice(0, 4000);
+  }
+  if (transferenciasAutoDesdeCentral.length > 0) {
+    const detalle = transferenciasAutoDesdeCentral
+      .map((t) => `${t.producto_nombre}: ${t.cantidad}`)
+      .join("; ");
+    const nota = `Auto-transferido desde Casa Central: ${detalle}`;
     observacionesFinal = (observacionesFinal ? `${observacionesFinal} | ${nota}` : nota).slice(0, 4000);
   }
 

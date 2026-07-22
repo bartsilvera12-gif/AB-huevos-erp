@@ -661,8 +661,9 @@ export default function NuevaVentaPage() {
     setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
-  /** Envía la venta. Con `permitirSinStock=true` autoriza vender aunque falte stock. */
-  async function enviarVenta(permitirSinStock: boolean) {
+  /** Envía la venta. Con `permitirSinStock=true` autoriza vender aunque falte stock.
+   *  Con `traerDesdeCentral=true` autoriza traer stock desde Casa Central antes de vender. */
+  async function enviarVenta(permitirSinStock: boolean, traerDesdeCentral: boolean = false) {
     // Guard duro contra doble submit: si ya hay una confirmación en vuelo, cortar
     // inmediatamente. El ref se evalúa de forma síncrona (no espera al re-render de React),
     // así que un segundo click/Enter casi simultáneo no puede disparar otra venta.
@@ -693,7 +694,7 @@ export default function NuevaVentaPage() {
           titular: metodoPago === "transferencia" ? pagoTitular.trim() || null : null,
           observacion: pagoObservacion.trim() || null,
         },
-        { permitirSinStock, pedidoId }
+        { permitirSinStock, pedidoId, traerDesdeCentral }
       );
 
       if (!resultado.success) {
@@ -744,6 +745,16 @@ export default function NuevaVentaPage() {
     setErrorVenta(null);
     await enviarVenta(true);
   }
+
+  async function confirmarTraerDesdeCentral() {
+    setConfirmSinStockOpen(false);
+    setErrorVenta(null);
+    await enviarVenta(false, true);
+  }
+
+  const totalFaltante = faltantes.reduce((acc, f) => acc + f.faltante, 0);
+  const totalCentralDisponible = faltantes.reduce((acc, f) => acc + Math.min(f.faltante, f.stock_central ?? 0), 0);
+  const centralCubreTodo = faltantes.length > 0 && totalCentralDisponible >= totalFaltante;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1200,7 +1211,11 @@ export default function NuevaVentaPage() {
               <span className="text-amber-500 text-xl leading-none">⚠</span>
               <div>
                 <h3 className="text-sm font-semibold text-slate-800">Sin stock en Abasto Norte</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Los siguientes productos no tienen stock disponible en Abasto Norte. Emití una Nota de Remisión desde Casa Central para reponer, o vendé igual (queda negativo).</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {centralCubreTodo
+                    ? "Casa Central tiene stock suficiente para cubrir el faltante. Podés traerlo automáticamente y vender, o vender igual (queda negativo)."
+                    : "Los siguientes productos no tienen stock suficiente en Abasto Norte. Podés traer lo que haya en Casa Central o vender igual (queda negativo)."}
+                </p>
               </div>
             </div>
 
@@ -1209,7 +1224,8 @@ export default function NuevaVentaPage() {
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 text-xs">
                     <th className="py-2 px-3 font-medium">Producto / Insumo</th>
-                    <th className="py-2 px-3 font-medium text-right">Stock en Abasto Norte</th>
+                    <th className="py-2 px-3 font-medium text-right">Abasto N.</th>
+                    <th className="py-2 px-3 font-medium text-right">Central</th>
                     <th className="py-2 px-3 font-medium text-right">Solicitado</th>
                     <th className="py-2 px-3 font-medium text-right">Faltante</th>
                   </tr>
@@ -1224,6 +1240,9 @@ export default function NuevaVentaPage() {
                         </span>
                       </td>
                       <td className="py-2 px-3 text-right tabular-nums">{f.stock_actual}</td>
+                      <td className={`py-2 px-3 text-right tabular-nums ${(f.stock_central ?? 0) >= f.faltante ? "text-emerald-700 font-semibold" : "text-slate-600"}`}>
+                        {f.stock_central ?? 0}
+                      </td>
                       <td className="py-2 px-3 text-right tabular-nums">{f.solicitado}</td>
                       <td className="py-2 px-3 text-right tabular-nums font-semibold text-red-600">{f.faltante}</td>
                     </tr>
@@ -1236,9 +1255,20 @@ export default function NuevaVentaPage() {
               <button type="button" onClick={() => setConfirmSinStockOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50">
                 Cancelar
               </button>
-              <button type="button" disabled={guardando} aria-busy={guardando} onClick={() => void confirmarVentaSinStock()} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button type="button" disabled={guardando} aria-busy={guardando} onClick={() => void confirmarVentaSinStock()} className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed">
                 {guardando ? "Guardando…" : "Vender sin stock"}
               </button>
+              {totalCentralDisponible > 0 && (
+                <button
+                  type="button"
+                  disabled={guardando}
+                  aria-busy={guardando}
+                  onClick={() => void confirmarTraerDesdeCentral()}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {guardando ? "Transfiriendo…" : centralCubreTodo ? "Traer desde Central y vender" : "Traer lo disponible de Central y vender"}
+                </button>
+              )}
             </div>
           </div>
         </div>
