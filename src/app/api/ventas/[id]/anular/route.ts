@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
+import { getUbicacionIdByCodigo, ajustarStockUbicacion } from "@/lib/multideposito/server";
 
 /**
  * POST /api/ventas/[id]/anular
@@ -68,6 +69,9 @@ export async function POST(
       stockDelta.set(m.producto_id, (stockDelta.get(m.producto_id) ?? 0) + Number(m.cantidad));
     }
 
+    // Multi-depósito: devolver stock a Abasto Norte también
+    const ubicacionVentaId = await getUbicacionIdByCodigo(sb, empresaId, "ABASTO-N");
+
     for (const [productoId, delta] of stockDelta) {
       const pQ = await sb
         .from("productos")
@@ -85,6 +89,11 @@ export async function POST(
         .eq("empresa_id", empresaId)
         .eq("id", productoId);
       if (upd.error) throw new Error(upd.error.message);
+
+      if (ubicacionVentaId) {
+        const errAju = await ajustarStockUbicacion(sb, empresaId, ubicacionVentaId, productoId, delta);
+        if (errAju) console.warn(`[anular] ajuste stock Abasto Norte falló para ${productoId}: ${errAju}`);
+      }
     }
 
     // Insertar movimientos ENTRADA de reversión (uno por cada SALIDA original)
@@ -101,6 +110,7 @@ export async function POST(
         referencia: `ANUL-${numeroControl}`,
         fecha: nowIso,
         venta_id: id,
+        ubicacion_id: ubicacionVentaId,
       });
       if (ins.error) {
         // Si el CHECK bloquea 'venta_anulada' o 'ENTRADA', devolvemos error claro

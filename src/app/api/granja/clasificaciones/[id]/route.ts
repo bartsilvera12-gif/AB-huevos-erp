@@ -3,6 +3,7 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getUbicacionIdByCodigo, ajustarStockUbicacion } from "@/lib/multideposito/server";
 
 const HUEVOS_POR_PLANCHA = 30;
 
@@ -92,6 +93,15 @@ async function moverStockPorTipo(
     .eq("id", productoId);
   if (upd.error) throw new Error(upd.error.message);
 
+  // Multi-depósito: reflejar el movimiento también en productos_stock_ubicacion (Casa Central)
+  const centralId = await getUbicacionIdByCodigo(supabase, empresaId, "CENTRAL");
+  if (centralId) {
+    const errAju = await ajustarStockUbicacion(supabase, empresaId, centralId, productoId, delta);
+    if (errAju) console.warn(`[clasificacion] ajuste stock Central falló para ${tipoNombre}: ${errAju}`);
+  } else {
+    console.warn(`[clasificacion] ubicación Casa Central (código CENTRAL) no encontrada para empresa ${empresaId}`);
+  }
+
   const ins = await supabase.from("movimientos_inventario").insert({
     empresa_id: empresaId,
     producto_id: productoId,
@@ -103,6 +113,7 @@ async function moverStockPorTipo(
     origen: tipoMov === "ENTRADA" ? "clasificacion" : "clasificacion_revertida",
     referencia,
     fecha: new Date().toISOString(),
+    ubicacion_id: centralId ?? null,
   });
   if (ins.error) console.warn(`[clasificacion] movimiento ${tipoMov} falló para ${tipoNombre}: ${ins.error.message}`);
   return true;

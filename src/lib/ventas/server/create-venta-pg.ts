@@ -1,6 +1,7 @@
 import { createServiceRoleClientWithDbSchema } from "@/lib/supabase/empresa-data-schema";
 import { convertirCantidad } from "@/lib/unidades/convert";
 import { obtenerSiguienteNumeroFacturaEmpresa } from "@/lib/facturacion/factura-suscripcion-servidor";
+import { getUbicacionIdByCodigo, ajustarStockUbicacion } from "@/lib/multideposito/server";
 
 /** Un faltante de stock detectado al validar la venta. */
 export interface FaltanteStock {
@@ -384,6 +385,9 @@ export async function createVentaTransaccionalPg(
     notaRemisionNumero = `NR-${String(nextNr).padStart(6, "0")}`;
   }
 
+  // Multi-depósito: la venta descuenta del depósito Abasto Norte (punto de venta) por default.
+  const ubicacionVentaId = await getUbicacionIdByCodigo(sb, params.empresaId, "ABASTO-N");
+
   // 5) Insertar venta
   let insVenta = await sb
     .from("ventas")
@@ -403,6 +407,7 @@ export async function createVentaTransaccionalPg(
       genera_nota_remision: generaNota,
       nota_remision_numero: notaRemisionNumero,
       tipo_documento: params.tipoDocumento === "factura" ? "factura" : "ticket",
+      ubicacion_id: ubicacionVentaId,
       fecha: fechaIso,
       observaciones: observacionesFinal,
     })
@@ -504,6 +509,12 @@ export async function createVentaTransaccionalPg(
       if (upd.error) throw new Error(upd.error.message);
       p.stock = nuevoStock;
 
+      // Multi-depósito: reflejar salida en productos_stock_ubicacion (Abasto Norte)
+      if (ubicacionVentaId) {
+        const errAju = await ajustarStockUbicacion(sb, params.empresaId, ubicacionVentaId, line.producto_id, -line.cantidad);
+        if (errAju) console.warn(`[venta] ajuste stock Abasto Norte falló para ${line.producto_nombre}: ${errAju}`);
+      }
+
       const mov = await sb.from("movimientos_inventario").insert({
         empresa_id: params.empresaId,
         producto_id: line.producto_id,
@@ -516,6 +527,7 @@ export async function createVentaTransaccionalPg(
         referencia: numeroControl,
         fecha: fechaIso,
         venta_id: ventaId,
+        ubicacion_id: ubicacionVentaId,
       });
       if (mov.error) throw new Error(mov.error.message);
     }
@@ -534,6 +546,12 @@ export async function createVentaTransaccionalPg(
       if (upd.error) throw new Error(upd.error.message);
       m.stock = nuevoStock;
 
+      // Multi-depósito: insumo también se descuenta de Abasto Norte
+      if (ubicacionVentaId) {
+        const errAju = await ajustarStockUbicacion(sb, params.empresaId, ubicacionVentaId, insId, -need);
+        if (errAju) console.warn(`[venta insumo] ajuste stock Abasto Norte falló para ${m.nombre}: ${errAju}`);
+      }
+
       const mov = await sb.from("movimientos_inventario").insert({
         empresa_id: params.empresaId,
         producto_id: insId,
@@ -542,12 +560,11 @@ export async function createVentaTransaccionalPg(
         tipo: "SALIDA",
         cantidad: need,
         costo_unitario: m.costo,
-        // origen restringido por CHECK a compra|venta|ajuste_manual|inventario_inicial.
-        // El consumo de insumo lo causa una venta → 'venta' (se distingue por venta_id + producto insumo).
         origen: "venta",
         referencia: numeroControl,
         fecha: fechaIso,
         venta_id: ventaId,
+        ubicacion_id: ubicacionVentaId,
       });
       if (mov.error) throw new Error(mov.error.message);
     }
