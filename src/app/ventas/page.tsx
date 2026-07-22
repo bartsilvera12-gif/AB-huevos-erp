@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import EdgeScrollArea from "@/components/ui/EdgeScrollArea";
 import { FancySelect } from "@/components/ui/FancySelect";
 import MobileFab from "@/components/ui/MobileFab";
@@ -162,6 +162,7 @@ export default function VentasPage() {
   const [busqueda,   setBusqueda]   = useState("");
   const [filtroTipo, setFiltroTipo] = useState<TipoVenta | "">("");
   const [filtroIva,  setFiltroIva]  = useState<TipoIvaVenta | "">("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmarAnular, setConfirmarAnular] = useState<{ id: string; numero: string } | null>(null);
   const [anularMotivo, setAnularMotivo] = useState("");
   const [anulando, setAnulando] = useState(false);
@@ -385,10 +386,23 @@ export default function VentasPage() {
               ) : (
                 filtradas.map((v) => {
                   const cantTotal = v.items.reduce((s, i) => s + i.cantidad, 0);
+                  const isExpanded = expandedId === v.id;
                   return (
-                    <tr key={v.id} className={`border-b border-slate-200 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors ${v.anulada ? "opacity-60" : ""}`}>
+                    <React.Fragment key={v.id}>
+                    <tr className={`border-b border-slate-200 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors ${v.anulada ? "opacity-60" : ""} ${isExpanded ? "bg-[#4FAEB2]/[0.04]" : ""}`}>
                       <td className="py-4 pr-4 font-mono text-xs text-gray-500 align-middle">
                         <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedId(isExpanded ? null : v.id)}
+                            className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                            aria-label={isExpanded ? "Ocultar detalle" : "Ver detalle"}
+                            aria-expanded={isExpanded}
+                          >
+                            <svg viewBox="0 0 20 20" fill="currentColor" className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}>
+                              <path fillRule="evenodd" d="M7.21 5.23a.75.75 0 011.06.02l4.25 4.25a.75.75 0 010 1.06L8.27 14.75a.75.75 0 01-1.08-1.04L10.94 10 7.19 6.29a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                            </svg>
+                          </button>
                           <span className={v.anulada ? "line-through" : ""}>{v.numero_control}</span>
                           {v.anulada && (
                             <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700">
@@ -517,6 +531,58 @@ export default function VentasPage() {
                         </div>
                       </td>
                     </tr>
+                    {isExpanded && (
+                      <tr className="border-b border-slate-200 bg-slate-50/60">
+                        <td colSpan={11} className="px-4 py-3">
+                          <div className="rounded-lg border border-slate-200 bg-white p-3">
+                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              Detalle de la venta ({v.items.length} {v.items.length === 1 ? "ítem" : "ítems"})
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs">
+                                <thead>
+                                  <tr className="text-slate-500">
+                                    <th className="py-1.5 pr-3 font-medium">SKU</th>
+                                    <th className="py-1.5 pr-3 font-medium">Producto</th>
+                                    <th className="py-1.5 pr-3 font-medium text-right">Cantidad</th>
+                                    <th className="py-1.5 pr-3 font-medium text-right">Precio unit.</th>
+                                    <th className="py-1.5 pr-3 font-medium text-right">Subtotal</th>
+                                    <th className="py-1.5 pr-3 font-medium text-right">IVA</th>
+                                    <th className="py-1.5 pr-3 font-medium text-right">Total línea</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {v.items.map((it, idx) => (
+                                    <tr key={`${v.id}-item-${idx}`} className="border-t border-slate-100">
+                                      <td className="py-1.5 pr-3 font-mono text-slate-500">{it.sku}</td>
+                                      <td className="py-1.5 pr-3 text-slate-800">{it.producto_nombre}</td>
+                                      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-700">{it.cantidad}</td>
+                                      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-700">{formatGs(it.precio_venta)}</td>
+                                      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-700">{formatGs(it.subtotal)}</td>
+                                      <td className="py-1.5 pr-3 text-right tabular-nums text-slate-500">{it.tipo_iva}</td>
+                                      <td className="py-1.5 pr-3 text-right tabular-nums font-semibold text-slate-800">{formatGs(it.total_linea)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="border-t-2 border-slate-200">
+                                    <td colSpan={4} className="py-2 pr-3 text-right text-slate-500">Subtotal</td>
+                                    <td className="py-2 pr-3 text-right tabular-nums text-slate-700">{formatGs(v.subtotal)}</td>
+                                    <td className="py-2 pr-3 text-right text-slate-500">IVA</td>
+                                    <td className="py-2 pr-3 text-right tabular-nums text-slate-700">{formatGs(v.monto_iva)}</td>
+                                  </tr>
+                                  <tr>
+                                    <td colSpan={6} className="py-1.5 pr-3 text-right font-semibold text-slate-600">Total</td>
+                                    <td className="py-1.5 pr-3 text-right tabular-nums font-semibold text-slate-900">{formatGs(v.total)}</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })
               )}
