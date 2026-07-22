@@ -97,8 +97,10 @@ export function canAccessSidebarSlug(
   opts?: { strict?: boolean }
 ): boolean {
   if (esSuperAdmin) return true;
-  // Demo multi-depósito: bypass permanente para los módulos nuevos (Depósitos + NR)
-  if (slug === "depositos" || slug === "notas_remision") return true;
+  // Demo multi-depósito: los módulos nuevos (Depósitos + NR) respetan la
+  // asignación de módulos por usuario como cualquier otro.
+  // (Anteriormente había bypass permanente; se removió para que perfiles
+  // operativos no vean módulos que no les corresponden.)
   // Limpieza defensiva: si algún usuario quedó con el rol demo viejo pegado en
   // localStorage (cuando existía el toggle), lo removemos para que no bloquee Caja.
   if (typeof window !== "undefined") {
