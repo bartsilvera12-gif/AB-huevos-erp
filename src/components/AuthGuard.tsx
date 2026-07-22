@@ -134,6 +134,20 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
       !access.superAdmin &&
       !isModuleSlugGranted(slug, access.slugs, access.inactiveSlugs, { strict: access.strict })
     ) {
+      // Para el path raíz "/" (dashboard) o cuando existe un fallback accesible,
+      // redirigimos directo al primer módulo disponible del usuario en vez de
+      // mostrar la pantalla "módulo no habilitado" (que rompe UX de perfiles
+      // operativos como producción / clasificación que no ven dashboard).
+      const fallback = firstAccessibleHref(access.slugs, {
+        superAdmin: access.superAdmin,
+        inactiveSlugs: access.inactiveSlugs,
+        strict: access.strict,
+      });
+      if (fallback && fallback !== pathname && (slug === "dashboard" || pathname === "/")) {
+        router.replace(fallback);
+        setBlockedSlug(null);
+        return;
+      }
       setBlockedSlug(slug);
       return;
     }
