@@ -50,6 +50,25 @@ function textEl(name: string, value: string | number): string {
   return `<${name}>${c}</${name}>`;
 }
 
+/**
+ * Emite `dDirRec` y, cuando corresponde, `dNumCasRec`.
+ * Regla SIFEN: `dNumCasRec` (D211) es obligatorio cuando se informa `dDirRec` (D209).
+ * Como el sistema no captura número de casa del receptor, por defecto se envía 0
+ * (mismo criterio que la rama de receptor manual).
+ */
+function pushDirYNumCasRec(
+  recParts: string[],
+  direccion: string | null | undefined,
+  casa?: number | null
+): void {
+  const dir = (direccion ?? "").trim();
+  if (!dir) return;
+  const casaNum =
+    casa == null || !Number.isFinite(Number(casa)) ? 0 : Math.max(0, Math.floor(Number(casa)));
+  recParts.push(textEl("dDirRec", dir));
+  recParts.push(textEl("dNumCasRec", String(casaNum)));
+}
+
 /** `tgTotSub.dRedon` — tipo `tdCRed` (decimal, hasta 4 decimales). */
 function montoRedondeo(n: number): string {
   const v = Number.isFinite(n) ? n : 0;
@@ -501,7 +520,7 @@ export function buildOfficialRdeFacturaElectronicaXml(
     recParts.push(textEl("dDTipIDRec", dDesTipo));
     recParts.push(textEl("dNumIDRec", num));
     recParts.push(textEl("dNomRec", receptor.nombre.trim()));
-    if (receptor.direccion?.trim()) recParts.push(textEl("dDirRec", receptor.direccion.trim()));
+    pushDirYNumCasRec(recParts, receptor.direccion, receptor.sifen_d_num_cas_rec);
     if (receptor.telefono?.trim()) {
       const tr = receptor.telefono.replace(/\D/g, "");
       if (tr.length >= 8) recParts.push(textEl("dTelRec", tr.slice(0, 15)));
@@ -518,7 +537,7 @@ export function buildOfficialRdeFacturaElectronicaXml(
     recParts.push(textEl("dRucRec", formatoCuerpoRucTipoTruc(dRucRec)));
     recParts.push(textEl("dDVRec", dDVRec));
     recParts.push(textEl("dNomRec", receptor.nombre.trim()));
-    if (receptor.direccion?.trim()) recParts.push(textEl("dDirRec", receptor.direccion.trim()));
+    pushDirYNumCasRec(recParts, receptor.direccion, receptor.sifen_d_num_cas_rec);
     if (receptor.telefono?.trim()) {
       const tr = receptor.telefono.replace(/\D/g, "");
       if (tr.length >= 8) recParts.push(textEl("dTelRec", tr.slice(0, 15)));
@@ -535,7 +554,7 @@ export function buildOfficialRdeFacturaElectronicaXml(
     recParts.push(textEl("dDTipIDRec", XSD_DES_DOC_CI_PY));
     recParts.push(textEl("dNumIDRec", doc.slice(0, 20)));
     recParts.push(textEl("dNomRec", receptor.nombre.trim()));
-    if (receptor.direccion?.trim()) recParts.push(textEl("dDirRec", receptor.direccion.trim()));
+    pushDirYNumCasRec(recParts, receptor.direccion, receptor.sifen_d_num_cas_rec);
     if (receptor.telefono?.trim()) {
       const tr = receptor.telefono.replace(/\D/g, "");
       if (tr.length >= 8) recParts.push(textEl("dTelRec", tr.slice(0, 15)));
