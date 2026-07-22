@@ -67,7 +67,10 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const { ok, data } = await getModuleAccessCached();
+      // Force refresh siempre: el cache en localStorage puede estar vacío por una
+      // sesión anterior. Sin forceRefresh, AuthGuard tomaba decisiones con datos
+      // stale y podía kickear al usuario al login en loop.
+      const { ok, data } = await getModuleAccessCached({ forceRefresh: true });
       if (cancelled) return;
 
       let superAdmin = false;
