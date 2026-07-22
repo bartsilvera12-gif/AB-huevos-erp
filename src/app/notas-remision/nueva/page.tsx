@@ -24,6 +24,9 @@ export default function EmitirNRPage() {
   const [emisor, setEmisor] = useState("");
   const [obs, setObs] = useState("");
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
+  const [productosAgregados, setProductosAgregados] = useState<string[]>([]);
+  const [busqueda, setBusqueda] = useState("");
+  const [dropdownAbierto, setDropdownAbierto] = useState(false);
   const [transportista, setTransportista] = useState("");
   const [rucTransp, setRucTransp] = useState("");
   const [conductor, setConductor] = useState("");
@@ -180,9 +183,57 @@ export default function EmitirNRPage() {
 
       {/* Productos */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-800">Productos a trasladar</h2>
-          <p className="text-xs text-slate-500">Disponibles en <strong>{nombreUbicacion(origen)}</strong></p>
+        <div className="border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-800">Productos a trasladar</h2>
+            <p className="text-xs text-slate-500">Buscando en <strong>{nombreUbicacion(origen)}</strong></p>
+          </div>
+          {/* Buscador de productos */}
+          <div className="relative">
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => { setBusqueda(e.target.value); setDropdownAbierto(true); }}
+              onFocus={() => setDropdownAbierto(true)}
+              onBlur={() => setTimeout(() => setDropdownAbierto(false), 150)}
+              placeholder="Buscar producto por nombre o SKU…"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+            />
+            {dropdownAbierto && (() => {
+              const q = busqueda.trim().toLowerCase();
+              const disponibles = PRODUCTOS_DEMO
+                .filter((p) => (stock[origen]?.[p.id] ?? 0) > 0)
+                .filter((p) => !productosAgregados.includes(p.id))
+                .filter((p) => q === "" || p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+                .slice(0, 8);
+              if (disponibles.length === 0) return null;
+              return (
+                <div className="absolute z-10 mt-1 w-full max-h-64 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                  {disponibles.map((p) => {
+                    const disp = stock[origen]?.[p.id] ?? 0;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onMouseDown={() => {
+                          setProductosAgregados([...productosAgregados, p.id]);
+                          setBusqueda("");
+                          setDropdownAbierto(false);
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-emerald-50 transition-colors text-left border-b border-slate-100 last:border-0"
+                      >
+                        <div>
+                          <div className="font-semibold text-slate-800">{p.nombre}</div>
+                          <div className="text-[11px] text-slate-500 font-mono">{p.sku}</div>
+                        </div>
+                        <div className="text-xs text-emerald-700 font-semibold">Disp: {fmt(disp)}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -191,15 +242,27 @@ export default function EmitirNRPage() {
                 <th className="px-5 py-3">Producto</th>
                 <th className="px-5 py-3 text-right">Disponible en origen</th>
                 <th className="px-5 py-3 text-right w-40">Cantidad a enviar</th>
+                <th className="px-5 py-3 text-right w-14"></th>
               </tr>
             </thead>
             <tbody>
-              {PRODUCTOS_DEMO.map((p) => {
+              {productosAgregados.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-slate-400 italic">
+                    Buscá y agregá los productos a trasladar desde el buscador de arriba.
+                  </td>
+                </tr>
+              ) : productosAgregados.map((prodId) => {
+                const p = PRODUCTOS_DEMO.find((x) => x.id === prodId);
+                if (!p) return null;
                 const disp = stock[origen]?.[p.id] ?? 0;
                 const cant = cantidades[p.id] ?? 0;
                 return (
                   <tr key={p.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-5 py-3 font-semibold text-slate-700">{p.nombre}</td>
+                    <td className="px-5 py-3 font-semibold text-slate-700">
+                      {p.nombre}
+                      <span className="ml-2 text-[10px] text-slate-500 font-mono font-normal">{p.sku}</span>
+                    </td>
                     <td className="px-5 py-3 text-right tabular-nums text-slate-600">{fmt(disp)}</td>
                     <td className="px-5 py-3">
                       <input
@@ -212,14 +275,28 @@ export default function EmitirNRPage() {
                         className={`w-full rounded-md border px-2 py-1 text-right text-sm ${cant > disp ? "border-rose-400 bg-rose-50" : "border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"}`}
                       />
                     </td>
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProductosAgregados(productosAgregados.filter((x) => x !== p.id));
+                          const c = { ...cantidades }; delete c[p.id]; setCantidades(c);
+                        }}
+                        className="text-rose-600 hover:bg-rose-50 rounded-md w-8 h-8 inline-flex items-center justify-center"
+                        title="Quitar producto"
+                      >✕</button>
+                    </td>
                   </tr>
                 );
               })}
-              <tr className="bg-slate-50 font-semibold text-slate-700">
-                <td className="px-5 py-3">Total planchas</td>
-                <td className="px-5 py-3"></td>
-                <td className="px-5 py-3 text-right tabular-nums">{fmt(total)}</td>
-              </tr>
+              {productosAgregados.length > 0 && (
+                <tr className="bg-slate-50 font-semibold text-slate-700">
+                  <td className="px-5 py-3">Total planchas</td>
+                  <td className="px-5 py-3"></td>
+                  <td className="px-5 py-3 text-right tabular-nums">{fmt(total)}</td>
+                  <td className="px-5 py-3"></td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
