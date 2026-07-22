@@ -71,6 +71,8 @@ export default function InventarioPage() {
   // Multi-depósito: stock por producto por ubicación (para columnas extra en la tabla).
   const [depositos, setDepositos] = useState<Array<{ id: string; nombre: string; codigo: string }>>([]);
   const [stockPorProducto, setStockPorProducto] = useState<Map<string, Record<string, number>>>(new Map());
+  // Selector para elegir qué depósito ver en la tabla ("" = todos, o id específico).
+  const [filtroDeposito, setFiltroDeposito] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -507,6 +509,30 @@ export default function InventarioPage() {
 
         </div>
 
+        {depositos.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 mr-1">Depósito:</span>
+            <button
+              type="button"
+              onClick={() => setFiltroDeposito("")}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-full transition ${filtroDeposito === "" ? "bg-slate-800 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50 bg-white"}`}
+              title="Ver todos los depósitos"
+            >
+              Todos
+            </button>
+            {depositos.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setFiltroDeposito(d.id)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-full transition ${filtroDeposito === d.id ? "bg-emerald-600 text-white" : "border border-slate-200 text-slate-600 hover:bg-slate-50 bg-white"}`}
+              >
+                {d.nombre}
+              </button>
+            ))}
+          </div>
+        )}
+
         <EdgeScrollArea>
           {/* min-w-[1100px] fuerza scroll horizontal real en mobile; en >=lg
               vuelve a comportarse natural. Columnas no críticas (SKU, Unidad,
@@ -520,7 +546,7 @@ export default function InventarioPage() {
                 <th className="py-3 pr-4 font-medium">Costo Prom.</th>
                 {tab !== "materia" && <th className="py-3 pr-4 font-medium">Precio Venta</th>}
                 <th className="py-3 pr-4 font-medium text-center">Stock total</th>
-                {depositos.map((d) => (
+                {depositos.filter((d) => filtroDeposito === "" || d.id === filtroDeposito).map((d) => (
                   <th key={d.id} className="py-3 pr-4 font-medium text-center hidden md:table-cell" title={d.nombre}>
                     {d.nombre.length > 10 ? d.codigo || d.nombre.slice(0, 10) : d.nombre}
                   </th>
@@ -574,7 +600,7 @@ export default function InventarioPage() {
                         </span>
                       )}
                     </td>
-                    {depositos.map((d) => {
+                    {depositos.filter((d) => filtroDeposito === "" || d.id === filtroDeposito).map((d) => {
                       const stockDep = stockPorProducto.get(p.id)?.[d.id] ?? 0;
                       return (
                         <td key={d.id} className="py-4 pr-4 text-center hidden md:table-cell">
