@@ -167,7 +167,12 @@ export default function ClasificacionPage() {
     produccion_id: string;
   };
   const filas = useMemo<FilaUnificada[]>(() => {
-    const pendientes: FilaUnificada[] = produccionesSinClasificar.map((p) => ({
+    // Producciones que ya tienen una clasificación (aunque no se haya aplicado stock aún)
+    // NO se muestran como pendientes: apareen sólo como fila de la clasificación existente.
+    const producidasConClasif = new Set(clasificaciones.map((c) => c.produccion_id));
+    const pendientes: FilaUnificada[] = produccionesSinClasificar
+      .filter((p) => !producidasConClasif.has(p.id))
+      .map((p) => ({
       key: `prod-${p.id}`,
       codigo: p.codigo,
       galpon: p.galpon,
