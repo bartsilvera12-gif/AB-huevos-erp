@@ -16,8 +16,17 @@ export async function GET(request: NextRequest) {
     const { supabase, auth } = ctx;
 
     const hoy = new Date();
-    const hace7 = new Date(hoy);
-    hace7.setDate(hoy.getDate() - 7);
+    // Semana calendario: lunes a domingo. getDay() → 0=Dom, 1=Lun, ..., 6=Sáb.
+    const diaSem = hoy.getDay();
+    const offsetLunes = diaSem === 0 ? 6 : diaSem - 1;
+    const lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - offsetLunes);
+    lunes.setHours(0, 0, 0, 0);
+    const domingo = new Date(lunes);
+    domingo.setDate(lunes.getDate() + 6);
+    domingo.setHours(23, 59, 59, 999);
+    // Mantener nombre `hace7` por compat con el resto del cálculo (ahora es "inicio de semana").
+    const hace7 = lunes;
     const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
     // Detectar tipo "Roto" (o alguno que empiece con "Rot") para reportar huevos rotos clasificados
@@ -109,14 +118,15 @@ export async function GET(request: NextRequest) {
       ? Math.round((huevosUltimoDia / totalGallinasActivas) * 1000) / 10
       : 0;
 
-    // Producción diaria de los últimos 7 días (rellenar días sin datos con 0).
-    const produccionDiaria: Array<{ fecha: string; total: number }> = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(hoy);
-      d.setDate(hoy.getDate() - i);
-      const ymd = d.toISOString().slice(0, 10);
-      produccionDiaria.push({ fecha: ymd, total: porDia.get(ymd) ?? 0 });
+    // Semana calendario: 7 días desde lunes.
+    const diasSemana: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(lunes);
+      d.setDate(lunes.getDate() + i);
+      diasSemana.push(d.toISOString().slice(0, 10));
     }
+    const produccionDiaria: Array<{ fecha: string; total: number }> =
+      diasSemana.map((ymd) => ({ fecha: ymd, total: porDia.get(ymd) ?? 0 }));
 
     // Producción por galpón por día (últimos 7 días) con % puesta y diff vs día anterior.
     const galponPorDia = new Map<string, Map<string, number>>();
@@ -139,12 +149,7 @@ export async function GET(request: NextRequest) {
     for (const g of galpones) {
       const gm = galponPorDia.get(g.id) ?? new Map<string, number>();
       const activas = gallinasActivasPorGalpon[g.id] ?? 0;
-      const dias: string[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(hoy);
-        d.setDate(hoy.getDate() - i);
-        dias.push(d.toISOString().slice(0, 10));
-      }
+      const dias = diasSemana;
       for (let idx = 0; idx < dias.length; idx++) {
         const ymd = dias[idx];
         const huevos = gm.get(ymd) ?? 0;
@@ -176,14 +181,16 @@ export async function GET(request: NextRequest) {
       const tiposHuevo = (tiposHuevoQ.data ?? []) as Array<{ id: string; nombre: string }>;
       const nombreTipo = new Map<string, string>();
       for (const t of tiposHuevo) nombreTipo.set(t.id, t.nombre);
+      // Las clasificaciones no siempre tienen `fecha` propio; usamos `created_at`
+      // como marca temporal (que es lo que aparece en la lista de la app).
       const clas7 = await supabase
         .from("granja_clasificaciones")
-        .select("id, fecha")
+        .select("id, created_at")
         .eq("empresa_id", auth.empresa_id)
-        .gte("fecha", hace7.toISOString());
+        .gte("created_at", hace7.toISOString());
       const claseFecha = new Map<string, string>();
-      for (const c of (clas7.data ?? []) as Array<{ id: string; fecha: string }>) {
-        claseFecha.set(c.id, (c.fecha ?? "").slice(0, 10));
+      for (const c of (clas7.data ?? []) as Array<{ id: string; created_at: string }>) {
+        claseFecha.set(c.id, (c.created_at ?? "").slice(0, 10));
       }
       const ids = [...claseFecha.keys()];
       if (ids.length > 0) {

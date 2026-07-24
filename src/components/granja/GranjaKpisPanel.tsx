@@ -195,7 +195,7 @@ function ProduccionGeneralChart({ data }: { data: Array<{ fecha: string; total: 
   const max = Math.max(1, ...data.map((d) => d.total));
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-4 text-sm font-semibold text-slate-700">Producción general — semanal</h3>
+      <h3 className="mb-4 text-sm font-semibold text-slate-700">Producción general — semana actual (lun-dom)</h3>
       {data.length === 0 ? (
         <p className="text-sm text-slate-400">Sin datos del período.</p>
       ) : (
@@ -232,7 +232,7 @@ function ProduccionPorTipoChart({ data }: { data: Array<{ fecha: string; tipo_id
   const max = Math.max(1, ...fechas.map((f) => tipos.reduce((s, [id]) => s + (data.find((x) => x.fecha === f && x.tipo_id === id)?.cantidad ?? 0), 0)));
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-1 text-sm font-semibold text-slate-700">Producción por tipo — semanal</h3>
+      <h3 className="mb-1 text-sm font-semibold text-slate-700">Producción por tipo — semana actual (lun-dom)</h3>
       <p className="mb-3 text-[11px] text-slate-500">Indicador de salud y alimentación (distribución de tipos por día).</p>
       {data.length === 0 || tipos.length === 0 ? (
         <p className="text-sm text-slate-400">Sin clasificaciones registradas en el período.</p>
@@ -278,7 +278,7 @@ function ProduccionPorTipoChart({ data }: { data: Array<{ fecha: string; tipo_id
 function ProduccionPorGalponTabla({ data }: { data: Array<{ fecha: string; galpon_id: string; galpon_nombre: string; huevos: number; gallinas: number; pct_puesta: number; diff_vs_ant: number | null }> }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">Producción por galpón — semanal</h3>
+      <h3 className="mb-3 text-sm font-semibold text-slate-700">Producción por galpón — semana actual (lun-dom)</h3>
       {data.length === 0 ? (
         <p className="text-sm text-slate-400">Sin datos del período.</p>
       ) : (
