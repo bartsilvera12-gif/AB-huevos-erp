@@ -72,6 +72,9 @@ export default function ClasificacionPage() {
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [tiposModalOpen, setTiposModalOpen] = useState(false);
   const [toastMensaje, setToastMensaje] = useState<string | null>(null);
+  // Confetti al armar planchas: se guarda la cantidad total de planchas nuevas.
+  // El overlay se desmonta solo con un timeout para que sea "one-shot".
+  const [celebracion, setCelebracion] = useState<{ id: number; total: number } | null>(null);
 
   async function cargarTodo() {
     setCargando(true);
@@ -165,6 +168,10 @@ export default function ClasificacionPage() {
         }).join(" · ");
         setToastMensaje(detTxt);
         setTimeout(() => setToastMensaje(null), 6000);
+        // Confetti: escala la cantidad de partículas con las planchas armadas (cap 60).
+        const totalPlanchas = planchas.reduce((s, p) => s + p.planchas, 0);
+        setCelebracion({ id: Date.now(), total: Math.min(60, Math.max(12, totalPlanchas * 8)) });
+        setTimeout(() => setCelebracion(null), 2200);
       }
       await cargarTodo();
       return { ok: true };
@@ -534,6 +541,8 @@ export default function ClasificacionPage() {
           onChange={cargarTodo}
         />
       )}
+
+      {celebracion && <ConfettiOverlay key={celebracion.id} total={celebracion.total} />}
 
       {toastMensaje && (
         <div className="fixed bottom-6 right-6 z-[60] max-w-sm animate-in fade-in slide-in-from-bottom-4">
@@ -1133,6 +1142,60 @@ function ModalNueva({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+/**
+ * Overlay one-shot: dispara N partículas (emojis) que caen desde arriba y explotan.
+ * Sin dependencias externas: puro CSS keyframes inline por partícula.
+ */
+function ConfettiOverlay({ total }: { total: number }) {
+  const emojis = ["🥚", "🎉", "✨", "🎊", "⭐"];
+  const partes = Array.from({ length: total }, (_, i) => {
+    const emoji = emojis[i % emojis.length];
+    const leftPct = Math.floor((i * 97) % 100);
+    const delay = ((i * 53) % 700);
+    const dur = 1400 + ((i * 137) % 800);
+    const rot = ((i * 71) % 720) - 360;
+    const drift = (((i * 41) % 200) - 100);
+    return { emoji, leftPct, delay, dur, rot, drift, key: i };
+  });
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[80] overflow-hidden">
+      <style jsx>{`
+        @keyframes confetti-fall {
+          0% { transform: translate3d(0, -8vh, 0) rotate(0deg); opacity: 0; }
+          10% { opacity: 1; }
+          100% { transform: translate3d(var(--drift, 0px), 110vh, 0) rotate(var(--rot, 360deg)); opacity: 0.8; }
+        }
+        @keyframes confetti-pop {
+          0% { transform: scale(0.4); opacity: 0; }
+          30% { transform: scale(1.2); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+      <div
+        className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 text-6xl"
+        style={{ animation: "confetti-pop 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards", filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.15))" }}
+      >
+        🥚➡️📦
+      </div>
+      {partes.map((p) => (
+        <span
+          key={p.key}
+          className="absolute top-0 text-2xl select-none"
+          style={{
+            left: `${p.leftPct}%`,
+            animation: `confetti-fall ${p.dur}ms ${p.delay}ms cubic-bezier(0.25, 0.5, 0.5, 1) forwards`,
+            ["--drift" as string]: `${p.drift}px`,
+            ["--rot" as string]: `${p.rot}deg`,
+          }}
+        >
+          {p.emoji}
+        </span>
+      ))}
     </div>
   );
 }
