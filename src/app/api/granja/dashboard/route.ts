@@ -94,20 +94,17 @@ export async function GET(request: NextRequest) {
     }
     const totalGallinasActivas = Object.values(gallinasActivasPorGalpon).reduce((s, n) => s + n, 0);
 
-    // % puesta día a día: usa la producción de la última fecha con datos (típicamente hoy).
-    // Antes se dividía por 7 (promedio 7d), el cliente pidió que sea día a día.
+    // % puesta mensual: huevos del mes ÷ (gallinas activas × días transcurridos del mes).
     const prods7 = (prods7Q.data ?? []) as Array<{ galpon_id: string; cantidad_huevos: number; bajas: number; fecha: string }>;
-    // Agrupar por fecha (yyyy-mm-dd) y tomar la más reciente.
-    const porDia = new Map<string, number>();
-    for (const p of prods7) {
-      const ymd = (p.fecha ?? "").slice(0, 10);
-      if (!ymd) continue;
-      porDia.set(ymd, (porDia.get(ymd) ?? 0) + (p.cantidad_huevos ?? 0));
-    }
-    const ultimoDia = [...porDia.keys()].sort().pop() ?? null;
-    const huevosUltimoDia = ultimoDia ? (porDia.get(ultimoDia) ?? 0) : 0;
-    const puestaPct7 = totalGallinasActivas > 0 ? Math.round((huevosUltimoDia / totalGallinasActivas) * 1000) / 10 : 0;
     const huevos7 = prods7.reduce((s, p) => s + (p.cantidad_huevos ?? 0), 0);
+    const diaDelMes = Math.max(1, hoy.getDate()); // 1 mínimo, evita div 0 al día 1.
+    const huevosMesParaPuesta = (prodsMesQ.data ?? []).reduce(
+      (s: number, p: { cantidad_huevos?: number }) => s + (p.cantidad_huevos ?? 0),
+      0
+    );
+    const puestaPct7 = totalGallinasActivas > 0
+      ? Math.round((huevosMesParaPuesta / (totalGallinasActivas * diaDelMes)) * 1000) / 10
+      : 0;
 
     // Por galpón mes actual
     const prodsMes = (prodsMesQ.data ?? []) as Array<{ galpon_id: string; cantidad_huevos: number; bajas: number }>;
@@ -119,14 +116,9 @@ export async function GET(request: NextRequest) {
       const bajasGallinasMes = rowsMes.reduce((s, p) => s + (p.bajas ?? 0), 0);
       const pct = totalMes > 0 ? Math.round((huevos / totalMes) * 1000) / 10 : 0;
       const activas = gallinasActivasPorGalpon[g.id] ?? 0;
-      // Puesta día a día por galpón: huevos del último día con datos ÷ gallinas activas.
-      const prodsUltimoDiaGalpon = ultimoDia
-        ? prods7
-            .filter((p) => p.galpon_id === g.id && (p.fecha ?? "").slice(0, 10) === ultimoDia)
-            .reduce((s, p) => s + (p.cantidad_huevos ?? 0), 0)
-        : 0;
+      // Puesta mensual por galpón: huevos del mes ÷ (gallinas activas × días transcurridos).
       const puestaGalpon = activas > 0
-        ? Math.round((prodsUltimoDiaGalpon / activas) * 1000) / 10
+        ? Math.round((huevos / (activas * diaDelMes)) * 1000) / 10
         : 0;
       return {
         galpon_id: g.id,
