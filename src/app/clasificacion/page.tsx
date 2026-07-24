@@ -222,6 +222,21 @@ export default function ClasificacionPage() {
 
   const totalHuevos = clasificaciones.reduce((s, c) => s + c.cantidad_huevos, 0);
 
+  // Totales por tipo de huevo (agregado de todas las clasificaciones).
+  const totalesPorTipo = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of clasificaciones) {
+      for (const d of c.detalle) {
+        m.set(d.tipo_huevo_id, (m.get(d.tipo_huevo_id) ?? 0) + Number(d.cantidad || 0));
+      }
+    }
+    return tipos.map((t) => {
+      const huevos = m.get(t.id) ?? 0;
+      const planchas = Math.floor(huevos / HUEVOS_POR_PLANCHA);
+      return { id: t.id, nombre: t.nombre, huevos, planchas };
+    });
+  }, [clasificaciones, tipos]);
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-[#4FAEB2]/[0.02] to-[#4FAEB2]/[0.05] p-6 shadow-sm">
@@ -271,6 +286,28 @@ export default function ClasificacionPage() {
         <KpiCard label="Registros de producción" value={String(clasificaciones.length)} icon={<Layers className="h-5 w-5" />} tone="slate" />
         <KpiCard label="Total de huevos" value={fmtNumero(totalHuevos)} icon={<Egg className="h-5 w-5" />} tone="sky" />
         <KpiCard label="Tipos de huevo definidos" value={String(tipos.length)} icon={<Tags className="h-5 w-5" />} tone="emerald" />
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <Egg className="h-4 w-4 text-slate-500" />
+          <h2 className="text-sm font-semibold text-slate-700">Cantidad de huevos según clasificación</h2>
+          <span className="ml-auto text-xs text-slate-500">Total acumulado por tipo (huevos y planchas de 30)</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {totalesPorTipo.map((t) => (
+            <div key={t.id} className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{t.nombre}</div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-lg font-bold text-slate-800 tabular-nums">{fmtNumero(t.huevos)}</span>
+                <span className="text-[10px] text-slate-500">huevos</span>
+              </div>
+              <div className="text-[11px] text-slate-600 tabular-nums">
+                <span className="font-semibold">{fmtNumero(t.planchas)}</span> plancha{t.planchas === 1 ? "" : "s"}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <SueltosPanel tipos={tipos} acumulador={acumulador} />
