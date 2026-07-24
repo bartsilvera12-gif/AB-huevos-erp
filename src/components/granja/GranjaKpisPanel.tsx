@@ -195,24 +195,24 @@ function ProduccionGeneralChart({ data }: { data: Array<{ fecha: string; total: 
   const max = Math.max(1, ...data.map((d) => d.total));
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-4 text-sm font-semibold text-slate-700">Producción general — últimos 7 días</h3>
+      <h3 className="mb-4 text-sm font-semibold text-slate-700">Producción general — semanal</h3>
       {data.length === 0 ? (
         <p className="text-sm text-slate-400">Sin datos del período.</p>
       ) : (
-        <div className="flex items-end gap-2 h-48">
+        <div className="flex items-stretch gap-2 h-56">
           {data.map((d) => {
-            const h = Math.round((d.total / max) * 100);
+            const h = max > 0 ? Math.round((d.total / max) * 100) : 0;
             return (
               <div key={d.fecha} className="flex flex-1 flex-col items-center gap-1">
                 <span className="text-[10px] font-semibold text-slate-700 tabular-nums">{fmtNumero(d.total)}</span>
                 <div className="w-full flex-1 flex items-end">
                   <div
                     className="w-full rounded-t bg-gradient-to-t from-emerald-500 to-emerald-300 transition-all"
-                    style={{ height: `${Math.max(4, h)}%` }}
+                    style={{ height: `${d.total === 0 ? 2 : Math.max(6, h)}%`, opacity: d.total === 0 ? 0.25 : 1 }}
                     title={`${fmtFechaDMY(d.fecha)}: ${fmtNumero(d.total)} huevos`}
                   />
                 </div>
-                <span className="text-[9px] text-slate-500 tabular-nums">{fmtFechaDMY(d.fecha)}</span>
+                <span className="text-[9px] text-slate-500 tabular-nums whitespace-nowrap">{fmtFechaDMY(d.fecha)}</span>
               </div>
             );
           })}
@@ -232,7 +232,7 @@ function ProduccionPorTipoChart({ data }: { data: Array<{ fecha: string; tipo_id
   const max = Math.max(1, ...fechas.map((f) => tipos.reduce((s, [id]) => s + (data.find((x) => x.fecha === f && x.tipo_id === id)?.cantidad ?? 0), 0)));
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-1 text-sm font-semibold text-slate-700">Producción por tipo — últimos 7 días</h3>
+      <h3 className="mb-1 text-sm font-semibold text-slate-700">Producción por tipo — semanal</h3>
       <p className="mb-3 text-[11px] text-slate-500">Indicador de salud y alimentación (distribución de tipos por día).</p>
       {data.length === 0 || tipos.length === 0 ? (
         <p className="text-sm text-slate-400">Sin clasificaciones registradas en el período.</p>
@@ -247,24 +247,24 @@ function ProduccionPorTipoChart({ data }: { data: Array<{ fecha: string; tipo_id
               </span>
             ))}
           </div>
-          <div className="flex items-end gap-3 h-48">
+          <div className="flex items-stretch gap-3 h-56">
             {fechas.map((f) => (
               <div key={f} className="flex flex-1 flex-col items-center gap-1">
                 <div className="flex w-full flex-1 items-end gap-0.5">
                   {tipos.map(([id], i) => {
                     const v = data.find((x) => x.fecha === f && x.tipo_id === id)?.cantidad ?? 0;
-                    const h = Math.round((v / max) * 100);
+                    const h = max > 0 ? Math.round((v / max) * 100) : 0;
                     return (
                       <div
                         key={id}
                         className="flex-1 rounded-t transition-all"
-                        style={{ background: colors[i % colors.length], height: `${Math.max(2, h)}%`, opacity: v === 0 ? 0.1 : 1 }}
+                        style={{ background: colors[i % colors.length], height: `${v === 0 ? 2 : Math.max(4, h)}%`, opacity: v === 0 ? 0.15 : 1 }}
                         title={`${fmtFechaDMY(f)} · ${data.find(x => x.fecha === f && x.tipo_id === id)?.tipo_nombre}: ${fmtNumero(v)}`}
                       />
                     );
                   })}
                 </div>
-                <span className="text-[9px] text-slate-500 tabular-nums">{fmtFechaDMY(f)}</span>
+                <span className="text-[9px] text-slate-500 tabular-nums whitespace-nowrap">{fmtFechaDMY(f)}</span>
               </div>
             ))}
           </div>
@@ -278,7 +278,7 @@ function ProduccionPorTipoChart({ data }: { data: Array<{ fecha: string; tipo_id
 function ProduccionPorGalponTabla({ data }: { data: Array<{ fecha: string; galpon_id: string; galpon_nombre: string; huevos: number; gallinas: number; pct_puesta: number; diff_vs_ant: number | null }> }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">Producción por galpón — últimos 7 días</h3>
+      <h3 className="mb-3 text-sm font-semibold text-slate-700">Producción por galpón — semanal</h3>
       {data.length === 0 ? (
         <p className="text-sm text-slate-400">Sin datos del período.</p>
       ) : (
