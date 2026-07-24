@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Egg, ListChecks, Layers, Sparkles, PiggyBank, Tags } from "lucide-react";
+import { fetchDepositos, fetchStockDeposito } from "@/lib/multideposito/client";
 
 type TipoHuevo = { id: string; codigo: number; nombre: string; producto_id?: string | null };
 type ProduccionOpt = { id: string; codigo: number; galpon: string; fecha: string; cantidad_huevos: number; bajas: number; responsable: string };
@@ -59,6 +60,9 @@ export default function ClasificacionPage() {
   const [produccionesSinClasificar, setProduccionesSinClasificar] = useState<ProduccionOpt[]>([]);
   const [productos, setProductos] = useState<ProductoOpt[]>([]);
   const [acumulador, setAcumulador] = useState<Record<string, number>>({});
+  // Stock por producto (planchas) en cada depósito, para mostrar bajo cada card de tipo.
+  const [stockCentral, setStockCentral] = useState<Map<string, number>>(new Map());
+  const [stockAbasto, setStockAbasto] = useState<Map<string, number>>(new Map());
   const [cargando, setCargando] = useState(true);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
 
@@ -93,6 +97,28 @@ export default function ClasificacionPage() {
       if (rP.ok) {
         setProductos((jP.data?.productos ?? []).map((p: { id: string; nombre: string; sku: string | null }) => ({ id: p.id, nombre: p.nombre, sku: p.sku })));
       }
+      // Cargar stock por depósito (Central + Abasto Norte) para mostrar bajo cada tipo.
+      try {
+        const dr = await fetchDepositos();
+        if (dr.ok) {
+          const central = dr.data.depositos.find((d) => d.codigo === "CENTRAL");
+          const abasto = dr.data.depositos.find((d) => d.codigo === "ABASTO-N");
+          const [csr, asr] = await Promise.all([
+            central ? fetchStockDeposito(central.id) : Promise.resolve({ ok: false as const, error: "" }),
+            abasto ? fetchStockDeposito(abasto.id) : Promise.resolve({ ok: false as const, error: "" }),
+          ]);
+          if (csr.ok) {
+            const m = new Map<string, number>();
+            for (const it of csr.data.items) m.set(it.producto_id, Number(it.stock) || 0);
+            setStockCentral(m);
+          }
+          if (asr.ok) {
+            const m = new Map<string, number>();
+            for (const it of asr.data.items) m.set(it.producto_id, Number(it.stock) || 0);
+            setStockAbasto(m);
+          }
+        }
+      } catch { /* no fatal */ }
     } catch (e) {
       setErrorGeneral(e instanceof Error ? e.message : "Error");
     } finally {
@@ -233,9 +259,12 @@ export default function ClasificacionPage() {
     return tipos.map((t) => {
       const huevos = m.get(t.id) ?? 0;
       const planchas = Math.floor(huevos / HUEVOS_POR_PLANCHA);
-      return { id: t.id, nombre: t.nombre, huevos, planchas };
+      const productoId = t.producto_id ?? null;
+      const central = productoId ? stockCentral.get(productoId) ?? 0 : null;
+      const abasto = productoId ? stockAbasto.get(productoId) ?? 0 : null;
+      return { id: t.id, nombre: t.nombre, huevos, planchas, productoId, central, abasto };
     });
-  }, [clasificaciones, tipos]);
+  }, [clasificaciones, tipos, stockCentral, stockAbasto]);
 
   return (
     <div className="space-y-6">
@@ -304,6 +333,11 @@ export default function ClasificacionPage() {
               </div>
               <div className="text-[11px] text-slate-600 tabular-nums">
                 <span className="font-semibold">{fmtNumero(t.planchas)}</span> plancha{t.planchas === 1 ? "" : "s"}
+              </div>
+              <div className="mt-1 border-t border-slate-200/70 pt-1 text-[10px] leading-tight text-slate-500 tabular-nums">
+                {t.productoId
+                  ? <>Central: <span className="font-semibold text-slate-700">{fmtNumero(t.central ?? 0)}</span> · Abasto: <span className="font-semibold text-slate-700">{fmtNumero(t.abasto ?? 0)}</span></>
+                  : <span className="italic text-slate-400">sin producto</span>}
               </div>
             </div>
           ))}
