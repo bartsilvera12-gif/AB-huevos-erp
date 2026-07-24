@@ -1585,14 +1585,55 @@ const DashInventario = memo(function DashInventario({
   productos: ProductoRaw[];
   compras:   CompraRaw[];
 }) {
-  const totalProductos = productos.length;
-  const totalUnidades  = productos.reduce((s, p) => s + p.stock_actual, 0);
-  const bajosStock     = productos.filter(p => p.stock_actual <= p.stock_minimo).length;
-  const valorTotal     = productos.reduce((s, p) => s + p.stock_actual * p.costo_promedio, 0);
+  // Toggle multi-depósito: total (stock global), Central o Abasto Norte.
+  const [stockScope, setStockScope] = useState<"total" | "central" | "abasto">("total");
+  const [stockCentral, setStockCentral] = useState<Map<string, number>>(new Map());
+  const [stockAbasto, setStockAbasto] = useState<Map<string, number>>(new Map());
 
-  const cntSaludable = productos.filter(p => p.stock_actual > p.stock_minimo).length;
-  const cntBajo      = productos.filter(p => p.stock_actual > 0 && p.stock_actual <= p.stock_minimo).length;
-  const cntCritico   = productos.filter(p => p.stock_actual <= 0).length;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const dr = await fetchWithSupabaseSession("/api/depositos", { cache: "no-store" });
+        if (!dr.ok) return;
+        const dj = (await dr.json()) as { data?: { depositos?: Array<{ id: string; codigo: string }> } };
+        const deps = dj.data?.depositos ?? [];
+        const central = deps.find((d) => d.codigo === "CENTRAL");
+        const abasto = deps.find((d) => d.codigo === "ABASTO-N");
+        const load = async (id: string): Promise<Map<string, number>> => {
+          const r = await fetchWithSupabaseSession(`/api/depositos/${id}/stock`, { cache: "no-store" });
+          if (!r.ok) return new Map();
+          const j = (await r.json()) as { data?: { items?: Array<{ producto_id: string; stock: number }> } };
+          const m = new Map<string, number>();
+          for (const it of j.data?.items ?? []) m.set(it.producto_id, Number(it.stock) || 0);
+          return m;
+        };
+        const [c, a] = await Promise.all([
+          central ? load(central.id) : Promise.resolve(new Map<string, number>()),
+          abasto ? load(abasto.id) : Promise.resolve(new Map<string, number>()),
+        ]);
+        if (cancelled) return;
+        setStockCentral(c);
+        setStockAbasto(a);
+      } catch { /* no fatal */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const stockFor = (p: ProductoRaw): number => {
+    if (stockScope === "central") return stockCentral.get(String(p.id)) ?? 0;
+    if (stockScope === "abasto") return stockAbasto.get(String(p.id)) ?? 0;
+    return p.stock_actual;
+  };
+
+  const totalProductos = productos.length;
+  const totalUnidades  = productos.reduce((s, p) => s + stockFor(p), 0);
+  const bajosStock     = productos.filter(p => stockFor(p) <= p.stock_minimo).length;
+  const valorTotal     = productos.reduce((s, p) => s + stockFor(p) * p.costo_promedio, 0);
+
+  const cntSaludable = productos.filter(p => stockFor(p) > p.stock_minimo).length;
+  const cntBajo      = productos.filter(p => stockFor(p) > 0 && stockFor(p) <= p.stock_minimo).length;
+  const cntCritico   = productos.filter(p => stockFor(p) <= 0).length;
 
   const proveedorMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1602,22 +1643,48 @@ const DashInventario = memo(function DashInventario({
 
   const criticos = useMemo(() =>
     productos
-      .filter(p => p.stock_actual <= p.stock_minimo)
-      .sort((a, b) => a.stock_actual - b.stock_actual)
-      .slice(0, 10),
-    [productos]
+      .filter(p => stockFor(p) <= p.stock_minimo)
+      .sort((a, b) => stockFor(a) - stockFor(b))
+      .slice(0, 10)
+      .map(p => ({ ...p, stock_actual: stockFor(p) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [productos, stockScope, stockCentral, stockAbasto]
   );
 
   const topPorValor = useMemo(() =>
     [...productos]
-      .map(p => ({ ...p, valor: p.stock_actual * p.costo_promedio }))
+      .map(p => ({ ...p, stock_actual: stockFor(p), valor: stockFor(p) * p.costo_promedio }))
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 8),
-    [productos]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [productos, stockScope, stockCentral, stockAbasto]
   );
 
   return (
     <div className="space-y-5">
+
+      {/* Toggle depósito */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Depósito:</span>
+        {(["total", "central", "abasto"] as const).map((s) => {
+          const label = s === "total" ? "Stock total" : s === "central" ? "Casa Central" : "Abasto Norte";
+          const active = stockScope === s;
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStockScope(s)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                active
+                  ? "bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] text-white shadow-sm"
+                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -2101,7 +2168,11 @@ export default function DashboardPage() {
   // Instancia En lo de Mari: solo Ventas / Inventario / Financiero (sin Comercial/CRM/Pipeline).
   const MARI_ALLOWED_TABS: TabDash[] = ["ventas", "inventario", "financiero", "granja"];
   const rawTabs: TabDash[] = dashScope.kind === "scoped" ? dashScope.tabs : TAB_VALID;
-  const effectiveTabs: TabDash[] = rawTabs.filter((t) => MARI_ALLOWED_TABS.includes(t));
+  // "granja" es un tab nuevo (Producción y clasificación); aseguramos que aparezca
+  // aunque no esté en dashboard_views del catálogo (bypass del scope hasta que se
+  // agregue la fila correspondiente para esta empresa).
+  const rawTabsConGranja: TabDash[] = rawTabs.includes("granja") ? rawTabs : [...rawTabs, "granja"];
+  const effectiveTabs: TabDash[] = rawTabsConGranja.filter((t) => MARI_ALLOWED_TABS.includes(t));
   const showTabNav = effectiveTabs.length > 1;
 
   // Si el tab actual no está permitido, redirigir al primero permitido.
