@@ -90,10 +90,10 @@ export default function GranjaKpisPanel() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">% Puesta (últimos 7 días)</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">% Puesta (día actual)</p>
           <p className={`mt-2 text-3xl font-bold tabular-nums leading-none ${puestaColor}`}>{data.puesta_pct_7d}%</p>
           <p className="mt-2 text-[11px] text-slate-500">
-            {fmtNumero(data.huevos_ultimos_7d)} huevos · {fmtNumero(data.total_gallinas_activas)} gallinas activas
+            {fmtNumero(data.total_gallinas_activas)} gallinas activas · huevos del último día registrado
           </p>
         </div>
 
@@ -171,7 +171,7 @@ export default function GranjaKpisPanel() {
           </div>
         )}
         <p className="mt-3 text-[10px] text-slate-400">
-          <strong>Gallinas activas</strong> = inicial − bajas históricas. <strong>% puesta</strong> = huevos últimos 7 días ÷ (gallinas activas × 7). Rango sano: 85-95%.
+          <strong>Gallinas activas</strong> = inicial − bajas históricas. <strong>% puesta</strong> = huevos del último día registrado ÷ gallinas activas. Rango sano: 85-95%.
         </p>
       </div>
     </section>

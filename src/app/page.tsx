@@ -1933,7 +1933,7 @@ const PERIODO_OPTS: { id: Periodo; label: string }[] = [
   { id: "anio", label: "Año"       },
 ];
 
-const TAB_VALID: TabDash[] = ["comercial", "financiero", "inventario", "ventas"];
+const TAB_VALID: TabDash[] = ["comercial", "financiero", "inventario", "ventas", "granja"];
 
 type DashScope =
   | { kind: "pending" }
@@ -2099,7 +2099,7 @@ export default function DashboardPage() {
   const nivel = usuarioActivo?.nivel ?? "administrador";
 
   // Instancia En lo de Mari: solo Ventas / Inventario / Financiero (sin Comercial/CRM/Pipeline).
-  const MARI_ALLOWED_TABS: TabDash[] = ["ventas", "inventario", "financiero"];
+  const MARI_ALLOWED_TABS: TabDash[] = ["ventas", "inventario", "financiero", "granja"];
   const rawTabs: TabDash[] = dashScope.kind === "scoped" ? dashScope.tabs : TAB_VALID;
   const effectiveTabs: TabDash[] = rawTabs.filter((t) => MARI_ALLOWED_TABS.includes(t));
   const showTabNav = effectiveTabs.length > 1;
@@ -2119,6 +2119,7 @@ export default function DashboardPage() {
     financiero: { label: "Financiero", icon: "💰" },
     inventario: { label: "Inventario", icon: "📦" },
     ventas: { label: "Ventas", icon: "🛒" },
+    granja: { label: "Producción y clasificación", icon: "🥚" },
   };
 
   if (!config) {
@@ -2318,7 +2319,6 @@ export default function DashboardPage() {
 
       {tab === "inventario" && (
         <div className="space-y-6">
-          <GranjaKpisPanel />
           <DashInventario
             productos={productos}
             compras={compras}
@@ -2332,6 +2332,12 @@ export default function DashboardPage() {
           productos={productos}
           periodo={periodo}
         />
+      )}
+
+      {tab === "granja" && (
+        <div className="space-y-6">
+          <GranjaKpisPanel />
+        </div>
       )}
 
     </div>
