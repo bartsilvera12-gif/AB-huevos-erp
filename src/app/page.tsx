@@ -3,6 +3,25 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
+import {
+  Package as IconPackage,
+  Hash as IconHash,
+  AlertTriangle as IconAlert,
+  Gem as IconGem,
+  Calendar as IconCalendar,
+  CalendarDays as IconCalendarDays,
+  Receipt as IconReceipt,
+  ShoppingBag as IconShoppingBag,
+  BarChart3 as IconBar,
+  Wallet as IconWallet,
+  Boxes as IconBoxes,
+  ShoppingCart as IconCart,
+  Egg as IconEgg,
+  Target as IconTarget,
+  MessageSquare as IconMsg,
+  CheckCircle2 as IconCheck,
+  TrendingUp as IconTrending,
+} from "lucide-react";
 // MobileDashboard se renderiza solo en mobile (md:hidden). El dashboard desktop
 // que vive en este mismo archivo queda intacto.
 import MobileDashboard from "@/app/_components/MobileDashboard";
@@ -510,10 +529,15 @@ function KpiCard({
   value: string;
   sub?: string;
   color?: string;
-  icon: string;
+  icon: React.ReactNode;
   variation?: number;
   variant?: "light" | "zentra";
 }) {
+  const iconWrap = (
+    <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#4FAEB2]/15 to-[#4FAEB2]/5 text-[#3F8E91] ring-1 ring-[#4FAEB2]/20">
+      {typeof icon === "string" ? <span className="text-lg">{icon}</span> : icon}
+    </div>
+  );
   if (variant === "zentra") {
     return (
       <motion.div
@@ -522,7 +546,7 @@ function KpiCard({
         style={{ backgroundColor: Z.card }}
       >
         <div className="flex items-start justify-between gap-2">
-          <div className="text-2xl opacity-90">{icon}</div>
+          {iconWrap}
           {variation !== undefined && (
             <span
               className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -554,7 +578,7 @@ function KpiCard({
       className="rounded-2xl border border-[#4FAEB2]/30 bg-white p-6 shadow-sm ring-1 ring-[#4FAEB2]/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-2xl">{icon}</div>
+        {iconWrap}
         {variation !== undefined && (
           <span
             className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -797,16 +821,16 @@ const DashComercial = memo(function DashComercial({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           variant="zentra"
-          icon="🎯"
+          icon={<IconTarget className="h-5 w-5" />}
           label="Leads nuevos"
           value={String(leadsNuevos)}
           color="text-[#60A5FA]"
           variation={12}
         />
-        <KpiCard variant="zentra" icon="💬" label="En negociación" value={String(enNegociacion)} color="text-amber-400" />
+        <KpiCard variant="zentra" icon={<IconMsg className="h-5 w-5" />} label="En negociación" value={String(enNegociacion)} color="text-amber-400" />
         <KpiCard
           variant="zentra"
-          icon="✅"
+          icon={<IconCheck className="h-5 w-5" />}
           label="Clientes ganados (CRM)"
           value={String(clientesGanados)}
           color="text-[#60A5FA]"
@@ -814,7 +838,7 @@ const DashComercial = memo(function DashComercial({
         />
         <KpiCard
           variant="zentra"
-          icon="📈"
+          icon={<IconTrending className="h-5 w-5" />}
           label="Tasa de conversión"
           value={`${tasaConversion.toFixed(1)}%`}
           color={tasaConversion >= config.meta_conversion_leads ? "text-emerald-400" : "text-white"}
@@ -1688,13 +1712,13 @@ const DashInventario = memo(function DashInventario({
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="📦" label="Productos totales"      value={String(totalProductos)} color="text-[#0EA5E9]" variation={4} />
-        <KpiCard icon="🔢" label="Stock total (unidades)" value={formatGs(totalUnidades)} color="text-[#0EA5E9]" />
-        <KpiCard icon="⚠️" label="Bajo stock mínimo"      value={String(bajosStock)}
+        <KpiCard icon={<IconPackage className="h-5 w-5" />} label="Productos totales"      value={String(totalProductos)} color="text-[#0EA5E9]" variation={4} />
+        <KpiCard icon={<IconBoxes className="h-5 w-5" />} label="Stock total (unidades)" value={formatGs(totalUnidades)} color="text-[#0EA5E9]" />
+        <KpiCard icon={<IconAlert className="h-5 w-5" />} label="Bajo stock mínimo"      value={String(bajosStock)}
           sub={bajosStock > 0 ? "requieren reposición" : "todo en orden"}
           color={bajosStock > 0 ? "text-red-600" : "text-[#0EA5E9]"}
           variation={bajosStock > 0 ? -2 : undefined} />
-        <KpiCard icon="💎" label="Valor del inventario"   value={`Gs. ${formatGsFull(valorTotal)}`} color="text-[#0EA5E9]" variation={12} />
+        <KpiCard icon={<IconGem className="h-5 w-5" />} label="Valor del inventario"   value={`Gs. ${formatGsFull(valorTotal)}`} color="text-[#0EA5E9]" variation={12} />
       </div>
 
       {/* Donut + Críticos */}
@@ -1895,13 +1919,13 @@ const DashVentas = memo(function DashVentas({
 
       {/* KPIs principales */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="📅" label="Ventas del día"    value={`Gs. ${formatGsFull(totalHoy)}`}
+        <KpiCard icon={<IconCalendar className="h-5 w-5" />} label="Ventas del día"    value={`Gs. ${formatGsFull(totalHoy)}`}
           sub={`${ventasHoy.length} transacciones`} color="text-blue-600" />
-        <KpiCard icon="📆" label="Ventas del mes"    value={`Gs. ${formatGsFull(totalMes)}`}
+        <KpiCard icon={<IconCalendarDays className="h-5 w-5" />} label="Ventas del mes"    value={`Gs. ${formatGsFull(totalMes)}`}
           sub={`${ventasMes.length} transacciones`} color="text-indigo-600" />
-        <KpiCard icon="🎫" label="Ticket promedio"   value={`Gs. ${formatGsFull(ticketProm)}`}
+        <KpiCard icon={<IconReceipt className="h-5 w-5" />} label="Ticket promedio"   value={`Gs. ${formatGsFull(ticketProm)}`}
           sub={`periodo: ${periodo}`} />
-        <KpiCard icon="📦" label="Unidades vendidas" value={formatGs(unidades)}
+        <KpiCard icon={<IconShoppingBag className="h-5 w-5" />} label="Unidades vendidas" value={formatGs(unidades)}
           sub={`en el periodo`} />
       </div>
 
@@ -2185,12 +2209,12 @@ export default function DashboardPage() {
     }
   }, [tab, effectiveTabs]);
 
-  const TAB_META: Record<TabDash, { label: string; icon: string }> = {
-    comercial: { label: "Comercial", icon: "📊" },
-    financiero: { label: "Financiero", icon: "💰" },
-    inventario: { label: "Inventario", icon: "📦" },
-    ventas: { label: "Ventas", icon: "🛒" },
-    granja: { label: "Producción y clasificación", icon: "🥚" },
+  const TAB_META: Record<TabDash, { label: string; icon: React.ReactNode }> = {
+    comercial: { label: "Comercial", icon: <IconBar className="h-4 w-4" /> },
+    financiero: { label: "Financiero", icon: <IconWallet className="h-4 w-4" /> },
+    inventario: { label: "Inventario", icon: <IconBoxes className="h-4 w-4" /> },
+    ventas: { label: "Ventas", icon: <IconCart className="h-4 w-4" /> },
+    granja: { label: "Producción y clasificación", icon: <IconEgg className="h-4 w-4" /> },
   };
 
   if (!config) {
