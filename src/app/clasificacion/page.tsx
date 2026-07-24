@@ -293,6 +293,18 @@ export default function ClasificacionPage() {
             <p className="mt-1 text-sm text-slate-500">Registro de producción diaria y clasificación por tipo.</p>
           </div>
           <div className="flex gap-2">
+            {/* TEMP: botón para probar la animación — borrar cuando ya no sea necesario */}
+            <button
+              type="button"
+              onClick={() => {
+                setCelebracion({ id: Date.now(), total: 40 });
+                setTimeout(() => setCelebracion(null), 2200);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 shadow-sm hover:bg-amber-100"
+              title="Probar animación de festejo (temporal)"
+            >
+              🎉 Probar animación
+            </button>
             <button
               type="button"
               onClick={() => setTiposModalOpen(true)}
