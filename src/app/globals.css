@@ -76,6 +76,39 @@ body {
  * oculto en ancestros; en @media print eso suele dejar casi en blanco la hoja salvo cabecera/pie del navegador.
  * La clase la agrega PhysicalCouponsPrintClient al montar.
  */
+/* Reglas de impresión GLOBALES: ocultan el chrome de la app (sidebar, header,
+ * nav mobile) y liberan el layout para que el contenido A4 no quede recortado
+ * por los overflow:hidden de #neura-app-shell / #neura-main-column.
+ * Cualquier página que se imprima se beneficia sin cambios extra. */
+@media print {
+  #neura-sidebar,
+  #neura-header,
+  nav[aria-label="Navegación principal mobile"],
+  .no-print { display: none !important; }
+
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  #neura-app-shell {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  #neura-main-column,
+  #neura-main-content {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+}
+
 @media print {
   html.physical-coupons-print-page,
   html.physical-coupons-print-page body {
