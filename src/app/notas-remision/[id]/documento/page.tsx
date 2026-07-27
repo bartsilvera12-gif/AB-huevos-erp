@@ -124,36 +124,48 @@ export default function DocumentoNRPage({ params }: { params: Promise<{ id: stri
           {/* Datos generales */}
           <div className="grid grid-cols-3 gap-x-6 gap-y-2 text-[11px]">
             <Field label="Fecha de emisión" value={fmtFechaHora(nr.fecha)} />
-            <Field label="Emisor" value={nr.emisor} />
-            <Field label="Motivo" value={nr.motivo} />
+            <Field label="Emisor / remitente" value={nr.emisor} />
+            <Field label="Motivo (resumen)" value={nr.motivo} />
+            <Field label="Fecha de inicio del traslado" value={fmtFecha(nr.fecha_inicio_traslado)} />
+            <Field label="Fecha de término del traslado" value={fmtFecha(nr.fecha_fin_traslado)} />
+            <Field label="Kilómetros estimados de recorrido" value="—" />
           </div>
 
-          {/* Origen / Destino */}
+          {/* Punto de partida / llegada */}
           <div className="mt-5 grid grid-cols-2 gap-4">
             <div className="rounded-md border border-slate-300 px-4 py-3">
-              <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500">Depósito de origen</p>
+              <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500">Punto de partida</p>
               <p className="mt-1 text-[13px] font-semibold text-slate-900">{origenNombre || "—"}</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Dirección: —</p>
             </div>
             <div className="rounded-md border border-slate-300 px-4 py-3">
-              <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500">Depósito de destino</p>
+              <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500">Punto de llegada</p>
               <p className="mt-1 text-[13px] font-semibold text-slate-900">{destinoNombre || "—"}</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Dirección: —</p>
             </div>
           </div>
 
-          {/* Transporte (opcional) */}
-          {(nr.transportista || nr.conductor || nr.chapa) && (
-            <div className="mt-5 rounded-md border border-slate-300 px-4 py-3">
-              <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500 mb-2">Datos del transporte</p>
-              <div className="grid grid-cols-3 gap-x-6 gap-y-2 text-[11px]">
-                <Field label="Transportista" value={nr.transportista ?? "—"} />
-                <Field label="RUC transportista" value={nr.ruc_transportista ?? "—"} />
-                <Field label="Chapa" value={nr.chapa ?? "—"} />
-                <Field label="Conductor" value={nr.conductor ?? "—"} />
-                <Field label="CI conductor" value={nr.ci_conductor ?? "—"} />
-                <Field label="Traslado" value={`${fmtFecha(nr.fecha_inicio_traslado)} → ${fmtFecha(nr.fecha_fin_traslado)}`} />
-              </div>
+          {/* Motivo del traslado — checkboxes estilo SIFEN */}
+          <div className="mt-5 rounded-md border border-slate-300 px-4 py-3">
+            <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500 mb-2">Motivo del traslado (marque una sola opción)</p>
+            <MotivoChecks motivo={nr.motivo} />
+          </div>
+
+          {/* Transporte */}
+          <div className="mt-5 rounded-md border border-slate-300 px-4 py-3">
+            <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500 mb-2">Datos del transporte</p>
+            <div className="grid grid-cols-3 gap-x-6 gap-y-2 text-[11px]">
+              <Field label="Marca del vehículo" value="—" />
+              <Field label="Número de chapa" value={nr.chapa ?? "—"} />
+              <Field label="Comprobante de venta relacionado" value="—" />
+              <Field label="Transportista (razón social)" value={nr.transportista ?? "—"} />
+              <Field label="RUC / CI del transportista" value={nr.ruc_transportista ?? "—"} />
+              <Field label="Dirección del transportista" value="—" />
+              <Field label="Conductor" value={nr.conductor ?? "—"} />
+              <Field label="CI del conductor" value={nr.ci_conductor ?? "—"} />
+              <Field label="Dirección del conductor" value="—" />
             </div>
-          )}
+          </div>
 
           {/* Ítems */}
           <div className="mt-6">
@@ -161,25 +173,28 @@ export default function DocumentoNRPage({ params }: { params: Promise<{ id: stri
               <thead>
                 <tr className="border-y-2 border-slate-800 text-slate-800">
                   <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">Código</th>
-                  <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">Descripción</th>
                   <th className="px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wider">Cantidad</th>
+                  <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">Detalle de mercadería</th>
+                  <th className="px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider">Lote</th>
                 </tr>
               </thead>
               <tbody>
                 {(nr.items ?? []).map((it, idx) => (
                   <tr key={it.producto_id} className={idx % 2 === 1 ? "bg-slate-50" : ""}>
                     <td className="px-2 py-1.5 font-mono text-[11px] text-slate-600">{it.producto_sku ?? "—"}</td>
-                    <td className="px-2 py-1.5 text-slate-800">{it.producto_nombre ?? it.producto_id}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-slate-800">{fmt(it.cantidad)}</td>
+                    <td className="px-2 py-1.5 text-slate-800">{it.producto_nombre ?? it.producto_id}</td>
+                    <td className="px-2 py-1.5 text-slate-500">—</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-slate-800">
-                  <td className="px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-700" colSpan={2}>
-                    Total de unidades
+                  <td className="px-2 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-700">
+                    Total
                   </td>
                   <td className="px-2 py-2 text-right tabular-nums text-[13px] font-bold text-slate-900">{fmt(total)}</td>
+                  <td className="px-2 py-2 text-[10px] text-slate-500" colSpan={2}>unidades</td>
                 </tr>
               </tfoot>
             </table>
@@ -205,18 +220,28 @@ export default function DocumentoNRPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
-          {/* Firmas */}
-          <div className="mt-16 grid grid-cols-2 gap-16 text-[11px]">
+          {/* Firmas — 3 columnas estilo SIFEN: Firma, Aclaración, Fecha */}
+          <div className="mt-14 grid grid-cols-3 gap-8 text-[11px]">
             <div className="border-t border-slate-800 pt-1 text-center">
-              <p className="uppercase tracking-wider text-slate-600">Firma y aclaración — Emisor</p>
+              <p className="uppercase tracking-wider text-slate-600">Firma</p>
             </div>
             <div className="border-t border-slate-800 pt-1 text-center">
-              <p className="uppercase tracking-wider text-slate-600">Firma y aclaración — Receptor</p>
+              <p className="uppercase tracking-wider text-slate-600">Aclaración de firma</p>
+            </div>
+            <div className="border-t border-slate-800 pt-1 text-center">
+              <p className="uppercase tracking-wider text-slate-600">Fecha</p>
             </div>
           </div>
 
-          {/* Pie */}
-          <div className="mt-8 text-center text-[9px] text-slate-400">
+          {/* Pie: destino de las copias + leyenda */}
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-3 text-[9px] text-slate-500">
+            <span>
+              <strong>Original:</strong> Destinatario · <strong>Duplicado:</strong> Remitente ·{" "}
+              <strong>Triplicado:</strong> Administración Tributaria · <strong>Cuadruplicado:</strong> Transportista
+            </span>
+            <span>Página 1 de 1</span>
+          </div>
+          <div className="mt-2 text-center text-[9px] text-slate-400">
             Documento no fiscal · válido únicamente como constancia interna de traslado de mercadería.
           </div>
         </div>
@@ -230,6 +255,47 @@ function Field({ label, value }: { label: string; value?: string | null }) {
     <div>
       <p className="text-[9px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
       <p className="mt-0.5 text-[12px] font-medium text-slate-800">{value?.toString().trim() || "—"}</p>
+    </div>
+  );
+}
+
+/** Grilla de checkboxes con los 13 motivos típicos del formulario SIFEN.
+ *  Marca la opción cuyo nombre coincide (case-insensitive) con el motivo del NR;
+ *  si no coincide con ninguno específico, marca "Traslado entre locales de la empresa"
+ *  como default razonable (es lo más común para transferencias Central → Abasto). */
+function MotivoChecks({ motivo }: { motivo?: string | null }) {
+  const opciones = [
+    "Venta",
+    "Importación",
+    "Compra",
+    "Consignación",
+    "Devolución",
+    "Traslado entre locales de la empresa",
+    "Transformación",
+    "Reparación",
+    "Exportación",
+    "Emisor móvil",
+    "Exhibición",
+    "Ferias",
+    "Otros (indique motivos no previstos)",
+  ];
+  const target = (motivo ?? "").trim().toLowerCase();
+  const explicit = opciones.findIndex((o) => o.toLowerCase() === target);
+  const marcada = explicit >= 0 ? explicit : opciones.indexOf("Traslado entre locales de la empresa");
+  return (
+    <div className="grid grid-cols-3 gap-x-6 gap-y-1.5 text-[11px] text-slate-700">
+      {opciones.map((o, i) => (
+        <label key={o} className="flex items-center gap-2">
+          <span
+            className={`inline-flex h-4 w-4 items-center justify-center border border-slate-500 ${
+              i === marcada ? "bg-slate-800 text-white" : "bg-white text-transparent"
+            }`}
+          >
+            <span className="text-[10px] font-bold leading-none">X</span>
+          </span>
+          {o}
+        </label>
+      ))}
     </div>
   );
 }
