@@ -145,9 +145,18 @@ export default function HistorialNRPage() {
                     <td className="px-5 py-3 text-right tabular-nums font-medium text-slate-800">{fmt(total)}</td>
                     <td className="px-5 py-3"><EstadoBadge estado={nr.estado} /></td>
                     <td className="px-5 py-3 text-right">
-                      {nr.estado === "pendiente" && (
-                        <Link href="/notas-remision/recepcion" className="rounded-md border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100">Recibir</Link>
-                      )}
+                      <div className="inline-flex items-center gap-1.5">
+                        <Link
+                          href={`/notas-remision/${nr.id}/documento`}
+                          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          title="Ver documento imprimible"
+                        >
+                          Imprimir
+                        </Link>
+                        {nr.estado === "pendiente" && (
+                          <Link href="/notas-remision/recepcion" className="rounded-md border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100">Recibir</Link>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
