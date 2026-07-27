@@ -325,9 +325,13 @@ export default function ClasificacionPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <Egg className="h-4 w-4 text-slate-500" />
           <h2 className="text-sm font-semibold text-slate-700">Cantidad de huevos según clasificación</h2>
+          <span className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#4FAEB2]/30 bg-[#4FAEB2]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#3F8E91]">
+            <span className="tabular-nums">{fmtNumero(totalesPorTipo.reduce((s, t) => s + t.planchas, 0))}</span>
+            planchas en total
+          </span>
           <span className="ml-auto text-xs text-slate-500">Total acumulado por tipo (huevos y planchas de 30)</span>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
