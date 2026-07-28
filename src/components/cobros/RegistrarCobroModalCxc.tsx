@@ -115,7 +115,8 @@ export function RegistrarCobroModalCxc({
     if (!(m > 0)) { setError("El monto debe ser mayor a cero."); return; }
     if (m > cuenta.saldo + 0.001) { setError("El monto supera el saldo pendiente."); return; }
     if (pideBanco && !entidadId) { setError("Seleccioná la entidad bancaria."); return; }
-    if (pideBanco && !referencia.trim()) { setError("Ingresá la referencia / nº de operación."); return; }
+    // Referencia opcional también para transferencia/tarjeta: aunque es lo esperado
+    // por auditoría, no bloqueamos el guardado si el operador no la tiene a mano.
     setGuardando(true);
     setError(null);
     try {
@@ -253,7 +254,7 @@ export function RegistrarCobroModalCxc({
               )}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
-                  {metodo === "tarjeta" ? "Autorización / referencia" : metodo === "transferencia" ? "Referencia / Nº operación" : "Referencia"}{pideBanco ? " *" : " (opcional)"}
+                  {metodo === "tarjeta" ? "Autorización / referencia" : metodo === "transferencia" ? "Referencia / Nº operación" : "Referencia"} (opcional)
                 </label>
                 <input value={referencia} onChange={(e) => setReferencia(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Nº comprobante, transferencia…" />
               </div>
