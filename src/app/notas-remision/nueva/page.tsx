@@ -39,9 +39,14 @@ export default function EmitirNRPage() {
       const r = await fetchDepositos();
       if (!r.ok) { setError(r.error); return; }
       setDepositos(r.data.depositos);
+      // Default sensato: Central → Abasto Norte (el flujo más común: reponer
+      // planchas al depósito de venta). Si no encontramos alguno por código,
+      // caemos al primero/segundo disponible.
+      const central = r.data.depositos.find((d) => d.codigo === "CENTRAL");
+      const abasto = r.data.depositos.find((d) => d.codigo === "ABASTO-N");
       if (r.data.depositos.length > 0) {
-        setOrigen(r.data.depositos[0].id);
-        setDestino(r.data.depositos[1]?.id ?? r.data.depositos[0].id);
+        setOrigen(central?.id ?? r.data.depositos[0].id);
+        setDestino(abasto?.id ?? r.data.depositos[1]?.id ?? r.data.depositos[0].id);
       }
     })();
   }, []);
