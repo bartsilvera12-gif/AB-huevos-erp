@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { FacturaElectronicaPanel } from "@/components/sifen/FacturaElectronicaPanel";
 import type { FacturaElectronicaDTO, SifenCancelacionPreviewDTO } from "@/lib/sifen/types";
@@ -259,8 +259,57 @@ function FacturaDetalleInner() {
         >
           📄 A4 PDF
         </a>
+        {factura.tipo?.toLowerCase() === "credito" && (
+          <ReciboPagoButton facturaId={factura.id} tieneSaldo={factura.saldo > 0} />
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Botón para imprimir el recibo del último cobro de esta factura.
+ * Si aún no hay cobros registrados, redirige a /pagos para que el usuario
+ * pueda registrar el pago (y desde ahí generar el recibo).
+ */
+function ReciboPagoButton({ facturaId, tieneSaldo }: { facturaId: string; tieneSaldo: boolean }) {
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  async function handleClick() {
+    setErr(null);
+    setBusy(true);
+    try {
+      const r = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/recibo`, { cache: "no-store" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.data?.recibo_id) {
+        // Si no hay cobros aún, mandar al usuario a /pagos.
+        if (r.status === 404) {
+          window.location.href = "/pagos";
+          return;
+        }
+        setErr(j?.error ?? "No se pudo abrir el recibo.");
+        return;
+      }
+      window.open(`/api/recibos-dinero/${j.data.recibo_id}/pdf?auto=1`, "_blank", "noopener");
+    } catch {
+      setErr("Error de red al abrir el recibo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={busy}
+        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-emerald-700 disabled:opacity-60"
+        title={tieneSaldo ? "Registrar pago e imprimir recibo" : "Imprimir recibo del pago"}
+      >
+        🧾 {tieneSaldo ? "Registrar pago / Recibo" : "Recibo de pago"}
+      </button>
+      {err && <span className="text-xs text-rose-600 self-center">{err}</span>}
+    </>
   );
 }
 
