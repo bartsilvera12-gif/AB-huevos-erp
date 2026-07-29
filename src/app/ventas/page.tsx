@@ -163,6 +163,7 @@ export default function VentasPage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoVenta | "">("");
   const [filtroIva,  setFiltroIva]  = useState<TipoIvaVenta | "">("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editarPagosVenta, setEditarPagosVenta] = useState<{ id: string; numero: string; total: number } | null>(null);
   const [confirmarAnular, setConfirmarAnular] = useState<{ id: string; numero: string } | null>(null);
   const [anularMotivo, setAnularMotivo] = useState("");
   const [anulando, setAnulando] = useState(false);
@@ -465,7 +466,11 @@ export default function VentasPage() {
                         )}
                       </td>
                       <td className="hidden py-4 pr-4 align-middle text-xs text-gray-600 lg:table-cell">
-                        {v.metodo_pago === "tarjeta" ? "Tarjeta"
+                        {v.metodo_pago === "mixto" ? (
+                          <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+                            Mixto
+                          </span>
+                        ) : v.metodo_pago === "tarjeta" ? "Tarjeta"
                           : v.metodo_pago === "transferencia" ? "Transfer."
                           : v.metodo_pago === "efectivo" ? "Efectivo"
                           : "—"}
@@ -524,6 +529,16 @@ export default function VentasPage() {
                             >
                               Editar
                             </Link>
+                          )}
+                          {!v.anulada && v.tipo_venta === "CONTADO" && (
+                            <button
+                              type="button"
+                              onClick={() => setEditarPagosVenta({ id: v.id, numero: v.numero_control, total: v.total })}
+                              className="inline-flex items-center justify-center rounded-md border border-violet-200 bg-white px-3 py-1.5 text-xs font-medium text-violet-700 hover:border-violet-300 hover:bg-violet-50 transition-colors"
+                              title="Editar métodos de pago de esta venta"
+                            >
+                              Pagos
+                            </button>
                           )}
                           {!v.anulada && (
                             <button
@@ -665,6 +680,218 @@ export default function VentasPage() {
           </div>
         </div>
       )}
+
+      {editarPagosVenta && (
+        <EditarPagosModal
+          ventaId={editarPagosVenta.id}
+          numero={editarPagosVenta.numero}
+          total={editarPagosVenta.total}
+          onClose={() => setEditarPagosVenta(null)}
+          onExito={async () => {
+            const closed = editarPagosVenta;
+            setEditarPagosVenta(null);
+            // Refrescar listado
+            const r = await getVentas();
+            setTodas(r);
+            if (closed) {
+              // opcional: mostrar algo
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Modal: editar pagos de una venta contado existente ────────────────────────
+function EditarPagosModal({
+  ventaId,
+  numero,
+  total,
+  onClose,
+  onExito,
+}: {
+  ventaId: string;
+  numero: string;
+  total: number;
+  onClose: () => void;
+  onExito: () => void | Promise<void>;
+}) {
+  type Linea = {
+    metodo: "efectivo" | "transferencia" | "tarjeta";
+    monto: string;
+    entidad_id: string;
+    referencia: string;
+    titular: string;
+  };
+  const [lineas, setLineas] = useState<Linea[]>([]);
+  const [entidades, setEntidades] = useState<Array<{ id: string; codigo: string | null; nombre: string }>>([]);
+  const [cargando, setCargando] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [r1, r2] = await Promise.all([
+          fetch(`/api/ventas/${ventaId}/pagos`, { credentials: "include", cache: "no-store" }),
+          fetch("/api/entidades-bancarias", { credentials: "include", cache: "no-store" }),
+        ]);
+        const [j1, j2] = await Promise.all([r1.json(), r2.json()]);
+        if (cancelled) return;
+        const pagos = ((j1?.data?.pagos ?? []) as Array<{ metodo_pago: string; monto: number; entidad_bancaria_id: string | null; referencia: string | null; titular: string | null }>);
+        setLineas(
+          pagos.length > 0
+            ? pagos.map((p) => ({
+                metodo: p.metodo_pago === "tarjeta" ? "tarjeta" : p.metodo_pago === "transferencia" ? "transferencia" : "efectivo",
+                monto: String(p.monto ?? ""),
+                entidad_id: p.entidad_bancaria_id ?? "",
+                referencia: p.referencia ?? "",
+                titular: p.titular ?? "",
+              }))
+            : [{ metodo: "efectivo", monto: String(total), entidad_id: "", referencia: "", titular: "" }]
+        );
+        setEntidades(j2?.data?.entidades ?? []);
+      } finally {
+        if (!cancelled) setCargando(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [ventaId, total]);
+
+  const suma = lineas.reduce((s, l) => s + (Number(l.monto) || 0), 0);
+  const restante = total - suma;
+
+  function upd(i: number, patch: Partial<Linea>) {
+    setLineas(lineas.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  }
+  function add() {
+    setLineas([...lineas, { metodo: "efectivo", monto: "", entidad_id: "", referencia: "", titular: "" }]);
+  }
+  function del(i: number) {
+    if (lineas.length <= 1) return;
+    setLineas(lineas.filter((_, idx) => idx !== i));
+  }
+  function autoResto(i: number) {
+    if (restante <= 0) return;
+    upd(i, { monto: String(Math.round((Number(lineas[i].monto) || 0) + restante)) });
+  }
+
+  async function guardar() {
+    setError(null);
+    if (Math.abs(restante) >= 1) {
+      setError(`La suma de los pagos debe ser igual al total (${total.toLocaleString("es-PY")}).`);
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/ventas/${ventaId}/pagos`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pagos: lineas
+            .filter((l) => Number(l.monto) > 0)
+            .map((l) => ({
+              metodo_pago: l.metodo,
+              monto: Number(l.monto),
+              entidad_bancaria_id: l.entidad_id || null,
+              entidad_nombre_snapshot: entidades.find((e) => e.id === l.entidad_id)?.nombre ?? null,
+              referencia: l.referencia.trim() || null,
+              titular: l.metodo === "transferencia" ? l.titular.trim() || null : null,
+            })),
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.success === false) {
+        setError(j?.error ?? "No se pudieron actualizar los pagos.");
+        setBusy(false);
+        return;
+      }
+      await Promise.resolve(onExito());
+    } catch {
+      setError("Error de red al guardar los pagos.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-3xl rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="mb-1 text-lg font-bold text-slate-800">Editar pagos</h3>
+        <p className="mb-4 text-xs text-slate-500">Venta {numero} · Total <strong>Gs. {total.toLocaleString("es-PY")}</strong></p>
+        {cargando ? (
+          <div className="p-10 text-center text-sm text-slate-400">Cargando pagos…</div>
+        ) : (
+          <div className="space-y-2">
+            {lineas.map((l, i) => {
+              const needEntidad = l.metodo === "transferencia" || l.metodo === "tarjeta";
+              return (
+                <div key={i} className="rounded-md border border-slate-200 bg-slate-50/50 p-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <select value={l.metodo} onChange={(e) => upd(i, { metodo: e.target.value as Linea["metodo"] })}
+                      className="h-9 w-full sm:w-36 rounded border border-slate-200 bg-white px-2 text-xs font-medium">
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="tarjeta">Tarjeta/Débito</option>
+                    </select>
+                    <input type="number" value={l.monto} onChange={(e) => upd(i, { monto: e.target.value })}
+                      placeholder="Monto (Gs.)"
+                      className="h-9 flex-1 min-w-[130px] rounded border border-slate-200 px-2 text-xs text-right tabular-nums font-semibold" />
+                    {needEntidad && (
+                      <>
+                        <select value={l.entidad_id} onChange={(e) => upd(i, { entidad_id: e.target.value })}
+                          className="h-9 flex-1 min-w-[150px] rounded border border-slate-200 bg-white px-2 text-xs">
+                          <option value="">— Entidad —</option>
+                          {entidades.map((e) => (
+                            <option key={e.id} value={e.id}>{e.codigo ? `${e.codigo} · ` : ""}{e.nombre}</option>
+                          ))}
+                        </select>
+                        <input type="text" value={l.referencia} onChange={(e) => upd(i, { referencia: e.target.value })}
+                          placeholder="Comprobante / ref."
+                          className="h-9 flex-1 min-w-[130px] rounded border border-slate-200 px-2 text-xs" />
+                        {l.metodo === "transferencia" && (
+                          <input type="text" value={l.titular} onChange={(e) => upd(i, { titular: e.target.value })}
+                            placeholder="Titular"
+                            className="h-9 flex-1 min-w-[130px] rounded border border-slate-200 px-2 text-xs" />
+                        )}
+                      </>
+                    )}
+                    <button type="button" onClick={() => autoResto(i)} disabled={restante <= 0}
+                      className="h-9 shrink-0 rounded border border-[#0EA5E9]/40 bg-[#0EA5E9]/[0.06] px-2 text-[10px] font-semibold text-[#0284C7] hover:bg-[#0EA5E9]/[0.12] disabled:opacity-40">
+                      +resto
+                    </button>
+                    {lineas.length > 1 && (
+                      <button type="button" onClick={() => del(i)}
+                        className="h-9 w-8 shrink-0 rounded border border-slate-200 text-slate-400 hover:bg-red-50 hover:text-red-600">×</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            <button type="button" onClick={add}
+              className="w-full text-xs py-1.5 rounded border border-dashed border-slate-300 text-slate-600 hover:bg-slate-50">
+              + Agregar pago
+            </button>
+            <div className="flex items-center justify-between text-xs pt-1">
+              <span className="text-slate-500">Total cobrado: <span className="font-bold tabular-nums text-slate-700">Gs. {suma.toLocaleString("es-PY")}</span></span>
+              <span className={`font-bold tabular-nums ${restante === 0 ? "text-emerald-600" : restante > 0 ? "text-amber-600" : "text-rose-600"}`}>
+                {restante === 0 ? "✓ Completo" : restante > 0 ? `Falta Gs. ${restante.toLocaleString("es-PY")}` : `Sobra Gs. ${Math.abs(restante).toLocaleString("es-PY")}`}
+              </span>
+            </div>
+            {error && <div className="mt-1 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
+          </div>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancelar</button>
+          <button onClick={guardar} disabled={busy || cargando}
+            className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-60">
+            {busy ? "Guardando…" : "Guardar pagos"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

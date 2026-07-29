@@ -1042,9 +1042,10 @@ export default function NuevaVentaPage() {
                 </table>
               </div>
 
-              {/* Totales + Cobro (vuelto) */}
+              {/* Totales + Cobro (vuelto). Cuando hay pago mixto activo, el
+                  panel se estira a ancho completo para el editor multi-línea. */}
               <div className="mt-5 flex justify-end">
-                <div className="w-full space-y-3 lg:w-80">
+                <div className={`w-full space-y-3 ${pagoMixto ? "lg:w-full" : "lg:w-80"}`}>
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-sm text-gray-600">
                       <span>Subtotal</span>
@@ -1705,13 +1706,15 @@ function PagosMixtoEditor({
 
   return (
     <div className="space-y-2">
-      {pagos.map((p, i) => (
-        <div key={i} className="rounded-md border border-slate-200 bg-white p-2 space-y-1.5">
-          <div className="flex items-center gap-1.5">
+      {pagos.map((p, i) => {
+        const needEntidad = p.metodo === "transferencia" || p.metodo === "tarjeta";
+        return (
+        <div key={i} className="rounded-md border border-slate-200 bg-white p-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <select
               value={p.metodo}
               onChange={(e) => update(i, { metodo: e.target.value as PagoMixtoLinea["metodo"] })}
-              className="h-8 rounded border border-slate-200 bg-white px-2 text-xs font-medium"
+              className="h-9 w-full sm:w-36 rounded border border-slate-200 bg-white px-2 text-xs font-medium"
             >
               <option value="efectivo">Efectivo</option>
               <option value="transferencia">Transferencia</option>
@@ -1723,13 +1726,46 @@ function PagosMixtoEditor({
               value={p.monto}
               onChange={(e) => update(i, { monto: e.target.value })}
               placeholder="Monto (Gs.)"
-              className="h-8 flex-1 min-w-0 rounded border border-slate-200 px-2 text-xs text-right tabular-nums font-semibold"
+              className="h-9 flex-1 min-w-[130px] rounded border border-slate-200 px-2 text-xs text-right tabular-nums font-semibold"
             />
+            {needEntidad && (
+              <>
+                <select
+                  value={p.entidad_id}
+                  onChange={(e) => update(i, { entidad_id: e.target.value })}
+                  className="h-9 flex-1 min-w-[150px] rounded border border-slate-200 bg-white px-2 text-xs"
+                >
+                  <option value="">— Entidad —</option>
+                  {entidades.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.codigo ? `${e.codigo} · ` : ""}
+                      {e.nombre}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={p.referencia}
+                  onChange={(e) => update(i, { referencia: e.target.value })}
+                  placeholder="Comprobante / ref."
+                  className="h-9 flex-1 min-w-[130px] rounded border border-slate-200 px-2 text-xs"
+                />
+                {p.metodo === "transferencia" && (
+                  <input
+                    type="text"
+                    value={p.titular}
+                    onChange={(e) => update(i, { titular: e.target.value })}
+                    placeholder="Titular"
+                    className="h-9 flex-1 min-w-[130px] rounded border border-slate-200 px-2 text-xs"
+                  />
+                )}
+              </>
+            )}
             <button
               type="button"
               onClick={() => autoCompletar(i)}
               disabled={restante <= 0}
-              className="h-8 shrink-0 rounded border border-[#0EA5E9]/40 bg-[#0EA5E9]/[0.06] px-2 text-[10px] font-semibold text-[#0284C7] hover:bg-[#0EA5E9]/[0.12] disabled:opacity-40"
+              className="h-9 shrink-0 rounded border border-[#0EA5E9]/40 bg-[#0EA5E9]/[0.06] px-2 text-[10px] font-semibold text-[#0284C7] hover:bg-[#0EA5E9]/[0.12] disabled:opacity-40"
               title="Poner el restante en este pago"
             >
               +resto
@@ -1738,48 +1774,16 @@ function PagosMixtoEditor({
               <button
                 type="button"
                 onClick={() => remove(i)}
-                className="h-8 w-7 shrink-0 rounded border border-slate-200 text-slate-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                className="h-9 w-8 shrink-0 rounded border border-slate-200 text-slate-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
                 title="Quitar este pago"
               >
                 ×
               </button>
             )}
           </div>
-          {(p.metodo === "transferencia" || p.metodo === "tarjeta") && (
-            <div className="grid grid-cols-2 gap-1.5">
-              <select
-                value={p.entidad_id}
-                onChange={(e) => update(i, { entidad_id: e.target.value })}
-                className="h-8 rounded border border-slate-200 bg-white px-2 text-xs"
-              >
-                <option value="">— Entidad —</option>
-                {entidades.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.codigo ? `${e.codigo} · ` : ""}
-                    {e.nombre}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={p.referencia}
-                onChange={(e) => update(i, { referencia: e.target.value })}
-                placeholder="Comprobante / ref."
-                className="h-8 rounded border border-slate-200 px-2 text-xs"
-              />
-              {p.metodo === "transferencia" && (
-                <input
-                  type="text"
-                  value={p.titular}
-                  onChange={(e) => update(i, { titular: e.target.value })}
-                  placeholder="Titular"
-                  className="col-span-2 h-8 rounded border border-slate-200 px-2 text-xs"
-                />
-              )}
-            </div>
-          )}
         </div>
-      ))}
+        );
+      })}
       <button
         type="button"
         onClick={add}
