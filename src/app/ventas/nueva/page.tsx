@@ -251,6 +251,20 @@ export default function NuevaVentaPage() {
   const [montoRecibido, setMontoRecibido] = useState("");
   const [metodoPago, setMetodoPago] = useState<MetodoPago>("efectivo");
 
+  // ── Pago mixto (contado con varios métodos) ───────────────────────────────
+  type PagoMixtoLinea = {
+    metodo: "efectivo" | "transferencia" | "tarjeta";
+    monto: string;
+    entidad_id: string;
+    referencia: string;
+    titular: string;
+  };
+  const [pagoMixto, setPagoMixto] = useState(false);
+  const [pagosMixto, setPagosMixto] = useState<PagoMixtoLinea[]>([
+    { metodo: "efectivo", monto: "", entidad_id: "", referencia: "", titular: "" },
+    { metodo: "transferencia", monto: "", entidad_id: "", referencia: "", titular: "" },
+  ]);
+
   // ── Detalle de cobro (conciliación bancaria) ──────────────────────────────
   const [entidades, setEntidades] = useState<{ id: string; codigo: string | null; nombre: string; tipo: string | null }[]>([]);
   const [pagoEntidadId, setPagoEntidadId] = useState("");
@@ -513,7 +527,12 @@ export default function NuevaVentaPage() {
   // Crédito exige cliente seleccionado Y plazo/vencimiento (≥1 día). Genera cuenta por cobrar.
   const creditoValido = tipoVenta === "CONTADO" || (plazoDiasNum >= 1 && !!clienteId);
   const documentoValido = tipoDocumento === "ticket" || !!clienteId;
-  const ventaValida   = items.length > 0 && creditoValido && documentoValido;
+  // Pago mixto: la suma de los pagos DEBE ser exactamente el total (tolerancia 1 Gs.).
+  const pagoMixtoValido =
+    !pagoMixto ||
+    tipoVenta !== "CONTADO" ||
+    Math.abs(pagosMixto.reduce((s, p) => s + (Number(p.monto) || 0), 0) - totalGeneral) < 1;
+  const ventaValida   = items.length > 0 && creditoValido && documentoValido && pagoMixtoValido;
 
   // Cliente (opcional) — selección + filtrado del buscador.
   const clienteSel = clientes.find((c) => c.id === clienteId) ?? null;
@@ -671,6 +690,21 @@ export default function NuevaVentaPage() {
     isSubmittingRef.current = true;
     setGuardando(true);
     try {
+      // Pago mixto: si está activo y hay ≥ 2 líneas con monto, mandamos el array
+      // `pagos` al backend (que además marca la venta como 'mixto' si son distintos métodos).
+      const pagosArrayFinal = pagoMixto && tipoVenta === "CONTADO"
+        ? pagosMixto
+            .filter((p) => Number(p.monto) > 0)
+            .map((p) => ({
+              metodo_pago: p.metodo,
+              monto: Number(p.monto),
+              entidad_bancaria_id: p.entidad_id || null,
+              entidad_nombre_snapshot: entidades.find((e) => e.id === p.entidad_id)?.nombre ?? null,
+              referencia: p.referencia.trim() || null,
+              titular: p.metodo === "transferencia" ? p.titular.trim() || null : null,
+            }))
+        : null;
+
       const resultado = await saveVenta(
         {
           items,
@@ -681,7 +715,8 @@ export default function NuevaVentaPage() {
           total:        totalGeneral,
           tipo_venta:   tipoVenta,
           plazo_dias:   tipoVenta === "CREDITO" ? plazoDiasNum : undefined,
-          metodo_pago:  metodoPago,
+          // Si es mixto, el backend lo sobreescribe a 'mixto' si hay 2+ métodos distintos.
+          metodo_pago:  pagoMixto ? "efectivo" : metodoPago,
           cliente_id:   clienteId || null,
           genera_nota_remision: !!clienteId && generaNotaRemision,
           tipo_documento: tipoDocumento,
@@ -694,7 +729,7 @@ export default function NuevaVentaPage() {
           titular: metodoPago === "transferencia" ? pagoTitular.trim() || null : null,
           observacion: pagoObservacion.trim() || null,
         },
-        { permitirSinStock, pedidoId, traerDesdeCentral }
+        { permitirSinStock, pedidoId, traerDesdeCentral, pagos: pagosArrayFinal }
       );
 
       if (!resultado.success) {
@@ -1029,7 +1064,30 @@ export default function NuevaVentaPage() {
 
                   {tipoVenta === "CONTADO" && (
                     <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2.5">
-                      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Cobro</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Cobro</p>
+                        <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={pagoMixto}
+                            onChange={(e) => setPagoMixto(e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]"
+                          />
+                          Pago mixto
+                        </label>
+                      </div>
+
+                      {pagoMixto && (
+                        <PagosMixtoEditor
+                          pagos={pagosMixto}
+                          onChange={setPagosMixto}
+                          total={totalGeneral}
+                          entidades={entidades}
+                          formatGs={formatGs}
+                        />
+                      )}
+
+                      {!pagoMixto && (
                       <div className="grid grid-cols-3 gap-1.5">
                         {([
                           { v: "efectivo", label: "Efectivo" },
@@ -1050,9 +1108,10 @@ export default function NuevaVentaPage() {
                           </button>
                         ))}
                       </div>
+                      )}
 
                       {/* Efectivo: monto recibido + vuelto, sin datos extra */}
-                      {metodoPago === "efectivo" && (
+                      {!pagoMixto && metodoPago === "efectivo" && (
                         <div className="space-y-1.5">
                           <MontoInput
                             value={montoRecibido}
@@ -1073,7 +1132,7 @@ export default function NuevaVentaPage() {
                       )}
 
                       {/* Transferencia / Tarjeta: resumen compacto + editar */}
-                      {(metodoPago === "transferencia" || metodoPago === "tarjeta") && (
+                      {!pagoMixto && (metodoPago === "transferencia" || metodoPago === "tarjeta") && (
                         <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-slate-700">
@@ -1599,6 +1658,150 @@ export default function NuevaVentaPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Editor de pago mixto (2+ métodos por venta) ───────────────────────────────
+type PagoMixtoLinea = {
+  metodo: "efectivo" | "transferencia" | "tarjeta";
+  monto: string;
+  entidad_id: string;
+  referencia: string;
+  titular: string;
+};
+
+function PagosMixtoEditor({
+  pagos,
+  onChange,
+  total,
+  entidades,
+  formatGs,
+}: {
+  pagos: PagoMixtoLinea[];
+  onChange: (next: PagoMixtoLinea[]) => void;
+  total: number;
+  entidades: { id: string; codigo: string | null; nombre: string; tipo: string | null }[];
+  formatGs: (n: number) => string;
+}) {
+  const suma = pagos.reduce((s, p) => s + (Number(p.monto) || 0), 0);
+  const restante = total - suma;
+
+  function update(i: number, patch: Partial<PagoMixtoLinea>) {
+    onChange(pagos.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+  function add() {
+    onChange([...pagos, { metodo: "efectivo", monto: "", entidad_id: "", referencia: "", titular: "" }]);
+  }
+  function remove(i: number) {
+    if (pagos.length <= 1) return;
+    onChange(pagos.filter((_, idx) => idx !== i));
+  }
+  function autoCompletar(i: number) {
+    if (restante <= 0) return;
+    const actual = Number(pagos[i].monto) || 0;
+    update(i, { monto: String(Math.round(actual + restante)) });
+  }
+
+  return (
+    <div className="space-y-2">
+      {pagos.map((p, i) => (
+        <div key={i} className="rounded-md border border-slate-200 bg-white p-2 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <select
+              value={p.metodo}
+              onChange={(e) => update(i, { metodo: e.target.value as PagoMixtoLinea["metodo"] })}
+              className="h-8 rounded border border-slate-200 bg-white px-2 text-xs font-medium"
+            >
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta/Débito</option>
+            </select>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={p.monto}
+              onChange={(e) => update(i, { monto: e.target.value })}
+              placeholder="Monto (Gs.)"
+              className="h-8 flex-1 min-w-0 rounded border border-slate-200 px-2 text-xs text-right tabular-nums font-semibold"
+            />
+            <button
+              type="button"
+              onClick={() => autoCompletar(i)}
+              disabled={restante <= 0}
+              className="h-8 shrink-0 rounded border border-[#0EA5E9]/40 bg-[#0EA5E9]/[0.06] px-2 text-[10px] font-semibold text-[#0284C7] hover:bg-[#0EA5E9]/[0.12] disabled:opacity-40"
+              title="Poner el restante en este pago"
+            >
+              +resto
+            </button>
+            {pagos.length > 1 && (
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="h-8 w-7 shrink-0 rounded border border-slate-200 text-slate-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                title="Quitar este pago"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {(p.metodo === "transferencia" || p.metodo === "tarjeta") && (
+            <div className="grid grid-cols-2 gap-1.5">
+              <select
+                value={p.entidad_id}
+                onChange={(e) => update(i, { entidad_id: e.target.value })}
+                className="h-8 rounded border border-slate-200 bg-white px-2 text-xs"
+              >
+                <option value="">— Entidad —</option>
+                {entidades.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.codigo ? `${e.codigo} · ` : ""}
+                    {e.nombre}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={p.referencia}
+                onChange={(e) => update(i, { referencia: e.target.value })}
+                placeholder="Comprobante / ref."
+                className="h-8 rounded border border-slate-200 px-2 text-xs"
+              />
+              {p.metodo === "transferencia" && (
+                <input
+                  type="text"
+                  value={p.titular}
+                  onChange={(e) => update(i, { titular: e.target.value })}
+                  placeholder="Titular"
+                  className="col-span-2 h-8 rounded border border-slate-200 px-2 text-xs"
+                />
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="w-full text-xs py-1.5 rounded border border-dashed border-slate-300 text-slate-600 hover:bg-white"
+      >
+        + Agregar pago
+      </button>
+      <div className="flex items-center justify-between pt-1 text-[11px]">
+        <span className="text-slate-500">
+          Total cobrado:{" "}
+          <span className={`font-bold tabular-nums ${suma === total ? "text-emerald-600" : "text-slate-700"}`}>
+            {formatGs(suma)}
+          </span>
+        </span>
+        <span
+          className={`font-bold tabular-nums ${
+            restante === 0 ? "text-emerald-600" : restante > 0 ? "text-amber-600" : "text-rose-600"
+          }`}
+        >
+          {restante === 0 ? "✓ Completo" : restante > 0 ? `Falta ${formatGs(restante)}` : `Sobra ${formatGs(Math.abs(restante))}`}
+        </span>
+      </div>
     </div>
   );
 }

@@ -300,27 +300,72 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Detalle de cobro (conciliación) — best-effort, FUERA de la transacción de
-    // venta. Si falla, la venta queda igual (no se rompe ni se afectan recetas).
-    // 1 detalle por venta: método = metodoPago; monto = total (suma = total).
+    // Detalle de cobro (conciliación) — best-effort, FUERA de la transacción.
+    // Soporta pago MIXTO: si el body trae `pagos: array` con 2+ items, se
+    // inserta un ventas_pagos_detalle por cada pago y se marca la venta como
+    // metodo_pago='mixto'. En caso contrario, se usa el pago_detalle legacy.
     try {
-      const pd = (o.pago_detalle ?? null) as Record<string, unknown> | null;
       const str = (v: unknown, max = 200) =>
         v === null || v === undefined || String(v).trim() === "" ? null : String(v).trim().slice(0, max);
-      const fechaAcred = (() => {
-        const v = pd?.fecha_acreditacion;
-        return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-      })();
-      await insertVentaPagoDetalle(schema, auth.empresa_id, ventaId, {
-        metodo_pago: metodoPago,
-        entidad_bancaria_id: pd?.entidad_bancaria_id ? String(pd.entidad_bancaria_id) : null,
-        entidad_nombre_snapshot: str(pd?.entidad_nombre_snapshot),
-        monto: totalDeclarado,
-        referencia: str(pd?.referencia),
-        titular: str(pd?.titular),
-        fecha_acreditacion: fechaAcred,
-        observacion: str(pd?.observacion, 500),
-      });
+      const pagosArr = Array.isArray(o.pagos) ? (o.pagos as Record<string, unknown>[]) : null;
+
+      if (pagosArr && pagosArr.length > 0) {
+        const VALID_METODOS = new Set(["efectivo", "transferencia", "tarjeta", "qr", "billetera", "otro"] as const);
+        for (const p of pagosArr) {
+          const raw = typeof p.metodo_pago === "string" ? p.metodo_pago : "efectivo";
+          const m = (VALID_METODOS.has(raw as typeof VALID_METODOS extends Set<infer U> ? U : never)
+            ? raw
+            : "efectivo") as "efectivo" | "transferencia" | "tarjeta" | "qr" | "billetera" | "otro";
+          const monto = Number(p.monto);
+          if (!Number.isFinite(monto) || monto <= 0) continue;
+          await insertVentaPagoDetalle(schema, auth.empresa_id, ventaId, {
+            metodo_pago: m,
+            entidad_bancaria_id: p.entidad_bancaria_id ? String(p.entidad_bancaria_id) : null,
+            entidad_nombre_snapshot: str(p.entidad_nombre_snapshot),
+            monto,
+            referencia: str(p.referencia),
+            titular: str(p.titular),
+            fecha_acreditacion:
+              typeof p.fecha_acreditacion === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.fecha_acreditacion)
+                ? p.fecha_acreditacion
+                : null,
+            observacion: str(p.observacion, 500),
+          });
+        }
+        // Si hubo más de un método distinto, marcar la venta como MIXTO
+        const metodosUnicos = new Set(
+          pagosArr
+            .map((p) => (typeof p.metodo_pago === "string" ? p.metodo_pago : null))
+            .filter(Boolean)
+        );
+        if (metodosUnicos.size > 1) {
+          try {
+            await createServiceRoleClientWithDbSchema(schema)
+              .from("ventas")
+              .update({ metodo_pago: "mixto" })
+              .eq("id", ventaId)
+              .eq("empresa_id", auth.empresa_id);
+          } catch (e) {
+            console.warn("[ventas/create] no se pudo marcar metodo_pago='mixto':", e instanceof Error ? e.message : e);
+          }
+        }
+      } else {
+        const pd = (o.pago_detalle ?? null) as Record<string, unknown> | null;
+        const fechaAcred = (() => {
+          const v = pd?.fecha_acreditacion;
+          return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+        })();
+        await insertVentaPagoDetalle(schema, auth.empresa_id, ventaId, {
+          metodo_pago: metodoPago,
+          entidad_bancaria_id: pd?.entidad_bancaria_id ? String(pd.entidad_bancaria_id) : null,
+          entidad_nombre_snapshot: str(pd?.entidad_nombre_snapshot),
+          monto: totalDeclarado,
+          referencia: str(pd?.referencia),
+          titular: str(pd?.titular),
+          fecha_acreditacion: fechaAcred,
+          observacion: str(pd?.observacion, 500),
+        });
+      }
     } catch (e) {
       console.error("[ventas/create] pago_detalle best-effort fallo (venta OK):", e instanceof Error ? e.message : e);
     }

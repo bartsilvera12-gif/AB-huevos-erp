@@ -63,11 +63,28 @@ export async function getVentas(): Promise<Venta[]> {
 /**
  * Crea una venta en base de datos (transacción servidor: ítems, stock, movimientos).
  */
+/** Una línea de pago dentro de un pago mixto (venta con varios métodos). */
+export interface PagoLinea {
+  metodo_pago: "efectivo" | "transferencia" | "tarjeta";
+  monto: number;
+  entidad_bancaria_id?: string | null;
+  entidad_nombre_snapshot?: string | null;
+  referencia?: string | null;
+  titular?: string | null;
+}
+
 export async function saveVenta(
   datos: Omit<Venta, "id" | "numero_control" | "fecha"> & { cliente_id?: string | null; genera_nota_remision?: boolean; tipo_documento?: "ticket" | "factura" },
   pedidoCocina?: PedidoCocinaInput,
   pagoDetalle?: PagoDetalleInput | null,
-  opts?: { permitirSinStock?: boolean; pedidoId?: string | null; traerDesdeCentral?: boolean }
+  opts?: {
+    permitirSinStock?: boolean;
+    pedidoId?: string | null;
+    traerDesdeCentral?: boolean;
+    /** Si viene con 2+ items, es pago MIXTO: se ignora pagoDetalle y la venta
+     *  se marca automáticamente con metodo_pago='mixto' en el backend. */
+    pagos?: PagoLinea[] | null;
+  }
 ): Promise<ResultadoGuardarVenta> {
   if (!datos.items || datos.items.length === 0) {
     return { success: false, error: "La venta debe tener al menos un producto." };
@@ -91,6 +108,7 @@ export async function saveVenta(
         observaciones: null,
         pedido_cocina: pedidoCocina ?? null,
         pago_detalle: pagoDetalle ?? null,
+        pagos: Array.isArray(opts?.pagos) && opts.pagos.length > 0 ? opts.pagos : null,
         permitir_sin_stock: opts?.permitirSinStock === true,
         traer_desde_central: opts?.traerDesdeCentral === true,
         genera_nota_remision: datos.genera_nota_remision === true,
