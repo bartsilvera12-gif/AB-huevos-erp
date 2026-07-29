@@ -118,3 +118,77 @@ export async function registrarCobro(
 
   return { cobro_id: cobroId, saldo_nuevo: saldoNuevo < 0 ? 0 : saldoNuevo, estado: estadoNuevo };
 }
+
+/**
+ * Edita un cobro existente. Si cambia el monto, recalcula el saldo y estado
+ * de la cuenta por cobrar (revierte el monto original + aplica el nuevo).
+ * Rechaza si el nuevo monto haría el saldo negativo (supera lo cobrable).
+ */
+export async function actualizarCobro(
+  sb: AppSupabaseClient,
+  empresaId: string,
+  cobroId: string,
+  patch: Partial<RegistrarCobroInput>
+): Promise<{ cobro_id: string; saldo_nuevo: number; estado: string }> {
+  if (!cobroId) throw new CobroError("Falta el id del cobro.");
+
+  const cbQ = await sb
+    .from("cobros_clientes")
+    .select("id, cuenta_por_cobrar_id, monto")
+    .eq("empresa_id", empresaId)
+    .eq("id", cobroId)
+    .maybeSingle();
+  if (cbQ.error) throw new CobroError(cbQ.error.message, 500);
+  if (!cbQ.data) throw new CobroError("Cobro no encontrado.", 404);
+  const cobro = cbQ.data as { id: string; cuenta_por_cobrar_id: string; monto: number | string };
+  const montoAnterior = round2(Number(cobro.monto) || 0);
+
+  const cxcQ = await sb
+    .from("cuentas_por_cobrar")
+    .select("id, total, saldo, estado")
+    .eq("empresa_id", empresaId)
+    .eq("id", cobro.cuenta_por_cobrar_id)
+    .maybeSingle();
+  if (cxcQ.error) throw new CobroError(cxcQ.error.message, 500);
+  if (!cxcQ.data) throw new CobroError("Cuenta por cobrar no encontrada.", 404);
+  const cxc = cxcQ.data as { id: string; total: number | string; saldo: number | string; estado: string };
+  const total = round2(Number(cxc.total) || 0);
+  const saldoActual = round2(Number(cxc.saldo) || 0);
+
+  // Reponer virtualmente el monto anterior para saber cuánto queda cobrable.
+  const saldoSinCobro = round2(saldoActual + montoAnterior);
+  const montoNuevo = patch.monto != null ? round2(Number(patch.monto) || 0) : montoAnterior;
+  if (!(montoNuevo > 0)) throw new CobroError("El monto debe ser mayor a cero.");
+  if (montoNuevo > saldoSinCobro + 0.001) {
+    throw new CobroError(`El monto (${montoNuevo}) supera el saldo cobrable (${saldoSinCobro}).`);
+  }
+
+  // Aplicar cambios al cobro (sólo los campos presentes en patch).
+  const updRow: Record<string, unknown> = {};
+  if (patch.monto != null) updRow.monto = montoNuevo;
+  if (patch.metodo_pago !== undefined) updRow.metodo_pago = metodoValido(patch.metodo_pago);
+  if (patch.entidad_bancaria_id !== undefined) updRow.entidad_bancaria_id = patch.entidad_bancaria_id || null;
+  if (patch.entidad_nombre_snapshot !== undefined) updRow.entidad_nombre_snapshot = patch.entidad_nombre_snapshot?.trim() || null;
+  if (patch.referencia !== undefined) updRow.referencia = patch.referencia?.trim() || null;
+  if (patch.titular !== undefined) updRow.titular = patch.titular?.trim() || null;
+  if (patch.observaciones !== undefined) updRow.observaciones = patch.observaciones?.trim() || null;
+  if (patch.fecha_pago !== undefined && typeof patch.fecha_pago === "string" && patch.fecha_pago.trim()) {
+    updRow.fecha_pago = patch.fecha_pago;
+  }
+  if (Object.keys(updRow).length > 0) {
+    const upd = await sb.from("cobros_clientes").update(updRow).eq("empresa_id", empresaId).eq("id", cobroId);
+    if (upd.error) throw new CobroError(upd.error.message, 500);
+  }
+
+  // Recalcular saldo/estado de la CxC (saldoSinCobro − montoNuevo).
+  const saldoNuevo = round2(saldoSinCobro - montoNuevo);
+  const estadoNuevo = saldoNuevo <= 0.001 ? "pagado" : saldoNuevo < total ? "parcial" : "pendiente";
+  const updCxc = await sb
+    .from("cuentas_por_cobrar")
+    .update({ saldo: saldoNuevo < 0 ? 0 : saldoNuevo, estado: estadoNuevo, updated_at: new Date().toISOString() })
+    .eq("empresa_id", empresaId)
+    .eq("id", cxc.id);
+  if (updCxc.error) throw new CobroError(updCxc.error.message, 500);
+
+  return { cobro_id: cobroId, saldo_nuevo: saldoNuevo < 0 ? 0 : saldoNuevo, estado: estadoNuevo };
+}

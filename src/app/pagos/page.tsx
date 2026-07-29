@@ -71,6 +71,7 @@ export default function PagosPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   const [cobrando, setCobrando] = useState<Cuenta | null>(null);
+  const [editandoCobro, setEditandoCobro] = useState<Cobro | null>(null);
   const [reciboBusy, setReciboBusy] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
@@ -294,23 +295,32 @@ export default function PagosPage() {
                       <td className="py-2.5 px-4 text-gray-600">{c.usuario_nombre ?? "—"}</td>
                       <td className="py-2.5 px-4 text-right tabular-nums font-semibold text-emerald-700">{fmtGs(c.monto)}</td>
                       <td className="py-2.5 px-4 text-right">
-                        <button
-                          disabled={reciboBusy === c.id}
-                          onClick={async () => {
-                            if (reciboBusy) return;
-                            setReciboBusy(c.id);
-                            try {
-                              const r = await generarYAbrirRecibo({ origen: "cobro_cxc", cobro_cliente_id: c.id });
-                              if (r.ok) { setToast("Recibo generado"); setTimeout(() => setToast(null), 2500); }
-                              else { setError(r.error ?? "No se pudo generar el recibo."); }
-                            } finally {
-                              setReciboBusy(null);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          {reciboBusy === c.id ? <><Loader2 className="h-3 w-3 animate-spin" /> Abriendo…</> : "Recibo"}
-                        </button>
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            onClick={() => setEditandoCobro(c)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50"
+                            title="Editar este cobro"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            disabled={reciboBusy === c.id}
+                            onClick={async () => {
+                              if (reciboBusy) return;
+                              setReciboBusy(c.id);
+                              try {
+                                const r = await generarYAbrirRecibo({ origen: "cobro_cxc", cobro_cliente_id: c.id });
+                                if (r.ok) { setToast("Recibo generado"); setTimeout(() => setToast(null), 2500); }
+                                else { setError(r.error ?? "No se pudo generar el recibo."); }
+                              } finally {
+                                setReciboBusy(null);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {reciboBusy === c.id ? <><Loader2 className="h-3 w-3 animate-spin" /> Abriendo…</> : "Recibo"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -339,6 +349,139 @@ export default function PagosPage() {
         onClose={() => setCobrando(null)}
         onExito={async () => { setToast("Pago registrado"); setTimeout(() => setToast(null), 2800); await cargar(); }}
       />
+
+      {/* Modal editar cobro existente */}
+      {editandoCobro && (
+        <EditarCobroModal
+          cobro={editandoCobro}
+          onClose={() => setEditandoCobro(null)}
+          onExito={async () => {
+            setEditandoCobro(null);
+            setToast("Cobro actualizado");
+            setTimeout(() => setToast(null), 2500);
+            await cargar();
+          }}
+          onError={(msg) => setError(msg)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Modal para editar un cobro ya registrado ──────────────────────────────────
+function EditarCobroModal({
+  cobro,
+  onClose,
+  onExito,
+  onError,
+}: {
+  cobro: Cobro;
+  onClose: () => void;
+  onExito: () => void | Promise<void>;
+  onError: (msg: string) => void;
+}) {
+  const [monto, setMonto] = useState<string>(String(cobro.monto ?? ""));
+  const [metodo, setMetodo] = useState<string>(cobro.metodo_pago ?? "efectivo");
+  const [referencia, setReferencia] = useState<string>(cobro.referencia ?? "");
+  const [fechaPago, setFechaPago] = useState<string>(
+    typeof cobro.fecha_pago === "string" ? cobro.fecha_pago.slice(0, 10) : ""
+  );
+  const [busy, setBusy] = useState(false);
+
+  async function guardar() {
+    setBusy(true);
+    try {
+      const r = await fetchWithSupabaseSession(`/api/cobros/${cobro.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          monto: Number(monto),
+          metodo_pago: metodo,
+          referencia: referencia.trim() || null,
+          fecha_pago: fechaPago ? `${fechaPago}T12:00:00Z` : undefined,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.success === false) {
+        onError(j?.error ?? "No se pudo actualizar el cobro.");
+        setBusy(false);
+        return;
+      }
+      await Promise.resolve(onExito());
+    } catch {
+      onError("Error de red al actualizar el cobro.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="mb-1 text-lg font-bold text-gray-800">Editar cobro</h3>
+        <p className="mb-4 text-xs text-slate-500">
+          Venta {cobro.numero_venta ?? "—"} · {cobro.cliente_nombre ?? ""}
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Monto</label>
+            <input
+              type="number"
+              value={monto}
+              onChange={(e) => setMonto(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm tabular-nums"
+              min={0}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Método de pago</label>
+            <select
+              value={metodo}
+              onChange={(e) => setMetodo(e.target.value)}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+            >
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Referencia</label>
+            <input
+              type="text"
+              value={referencia}
+              onChange={(e) => setReferencia(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Nº comprobante, transferencia…"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500">Fecha de pago</label>
+            <input
+              type="date"
+              value={fechaPago}
+              onChange={(e) => setFechaPago(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={guardar}
+            disabled={busy}
+            className="rounded-md bg-[#0EA5E9] px-4 py-2 text-sm font-medium text-white hover:bg-[#0284C7] disabled:opacity-60"
+          >
+            {busy ? "Guardando…" : "Guardar cambios"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
