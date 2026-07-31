@@ -653,19 +653,28 @@ export default function ClientesPage() {
                       </td>
                     ))}
                     <td className="py-4 pr-4 pl-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setErrorBorrar(null);
-                          setMotivoBorrar("");
-                          setCancelarSuscripciones(false);
-                          setAnularFacturas(false);
-                          setConfirmarBorrar({ id: c.id, nombre: clienteNombre(c) });
-                        }}
-                        className="inline-flex items-center rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:border-rose-300 hover:bg-rose-50 transition-colors"
-                      >
-                        Borrar
-                      </button>
+                      <div className="inline-flex items-center gap-1.5">
+                        <Link
+                          href={`/clientes/${c.id}/estado-cuenta`}
+                          className="inline-flex items-center rounded-md border border-[#4FAEB2]/40 bg-[#4FAEB2]/[0.06] px-3 py-1.5 text-xs font-medium text-[#3F8E91] hover:bg-[#4FAEB2]/[0.12] transition-colors"
+                          title="Ver estado de cuenta del cliente"
+                        >
+                          Estado de cuenta
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setErrorBorrar(null);
+                            setMotivoBorrar("");
+                            setCancelarSuscripciones(false);
+                            setAnularFacturas(false);
+                            setConfirmarBorrar({ id: c.id, nombre: clienteNombre(c) });
+                          }}
+                          className="inline-flex items-center rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:border-rose-300 hover:bg-rose-50 transition-colors"
+                        >
+                          Borrar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

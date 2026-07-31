@@ -58,14 +58,38 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
     .select("numero_venta, fecha_emision, fecha_vencimiento, total, saldo, estado")
     .eq("empresa_id", empresaId).eq("cliente_id", id).order("fecha_emision", { ascending: false });
   let saldoPendiente = 0, vencido = 0;
+  const aging = { d030: 0, d3160: 0, d6190: 0, d90p: 0 };
+  const hoyDate = new Date(hoy);
+  const diasEntre = (venc: string): number => {
+    const d = new Date(venc);
+    return Math.floor((hoyDate.getTime() - d.getTime()) / 86400000);
+  };
   const movs = ((cxcQ.data ?? []) as Record<string, unknown>[]).map((r) => {
     const total = Number(r.total) || 0, saldo = Number(r.saldo) || 0;
     const venc = r.fecha_vencimiento ? String(r.fecha_vencimiento).slice(0, 10) : null;
     const vig = r.estado === "pendiente" || r.estado === "parcial";
     if (r.estado !== "anulado") saldoPendiente += saldo;
     const vencida = vig && venc != null && venc < hoy;
-    if (vencida) vencido += saldo;
-    return { numero: r.numero_venta, emision: r.fecha_emision, venc, total, cobrado: total - saldo, saldo, estado: r.estado, vencida };
+    let diasVencido: number | null = null;
+    if (vencida && venc) {
+      diasVencido = diasEntre(venc);
+      vencido += saldo;
+      if (diasVencido <= 30) aging.d030 += saldo;
+      else if (diasVencido <= 60) aging.d3160 += saldo;
+      else if (diasVencido <= 90) aging.d6190 += saldo;
+      else aging.d90p += saldo;
+    }
+    return {
+      numero: r.numero_venta,
+      emision: r.fecha_emision,
+      venc,
+      total,
+      cobrado: total - saldo,
+      saldo,
+      estado: r.estado,
+      vencida,
+      dias_vencido: diasVencido,
+    };
   });
 
   const cobQ = await ctx.supabase
@@ -86,6 +110,7 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
       <td>${esc(m.numero ?? "—")}</td>
       <td>${fmtFecha(m.emision)}</td>
       <td class="${m.vencida ? "venc" : ""}">${fmtFecha(m.venc)}</td>
+      <td class="r ${m.vencida ? "venc" : ""}">${m.dias_vencido != null ? m.dias_vencido + " días" : "—"}</td>
       <td class="r">${fmtGs(m.total)}</td>
       <td class="r">${fmtGs(m.cobrado)}</td>
       <td class="r">${fmtGs(m.saldo)}</td>
@@ -148,9 +173,23 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
 
   <h2 class="sec">Cuentas a crédito</h2>
   <table>
-    <thead><tr><th>Venta</th><th>Emisión</th><th>Vencimiento</th><th class="r">Total</th><th class="r">Cobrado</th><th class="r">Saldo</th><th>Estado</th></tr></thead>
-    <tbody>${filasMov || `<tr><td colspan="7" style="text-align:center">Sin cuentas a crédito</td></tr>`}</tbody>
+    <thead><tr><th>Venta</th><th>Emisión</th><th>Vencimiento</th><th class="r">Vencido</th><th class="r">Total</th><th class="r">Cobrado</th><th class="r">Saldo</th><th>Estado</th></tr></thead>
+    <tbody>${filasMov || `<tr><td colspan="8" style="text-align:center">Sin cuentas a crédito</td></tr>`}</tbody>
   </table>
+
+  ${vencido > 0 ? `
+  <h2 class="sec">Antigüedad del saldo vencido</h2>
+  <table>
+    <thead><tr><th>Rango</th><th class="r">0-30 días</th><th class="r">31-60 días</th><th class="r">61-90 días</th><th class="r">+90 días</th><th class="r">Total vencido</th></tr></thead>
+    <tbody><tr>
+      <td>Monto</td>
+      <td class="r">${fmtGs(aging.d030)}</td>
+      <td class="r">${fmtGs(aging.d3160)}</td>
+      <td class="r" style="color:#b45309">${fmtGs(aging.d6190)}</td>
+      <td class="r" style="color:#dc2626;font-weight:700">${fmtGs(aging.d90p)}</td>
+      <td class="r" style="font-weight:700">${fmtGs(vencido)}</td>
+    </tr></tbody>
+  </table>` : ""}
 
   <h2 class="sec">Cobros registrados</h2>
   <table>
