@@ -1856,10 +1856,20 @@ const DashVentas = memo(function DashVentas({
     return ventas.filter(v => !v.anulada && enRango(v.fecha, d, h));
   }, [ventas]);
 
-  const totalHoy   = ventasHoy.reduce((s, v) => s + v.total, 0);
-  const totalMes   = ventasMes.reduce((s, v) => s + v.total, 0);
-  const ticketProm = ventasFilt.length > 0 ? ventasFilt.reduce((s, v) => s + v.total, 0) / ventasFilt.length : 0;
-  const unidades   = ventasFilt.flatMap(v => v.lineas ?? []).reduce((s, l) => s + (l?.cantidad ?? 0), 0);
+  const totalHoy     = ventasHoy.reduce((s, v) => s + v.total, 0);
+  const totalPeriodo = ventasFilt.reduce((s, v) => s + v.total, 0);
+  void ventasMes;
+  const ticketProm  = ventasFilt.length > 0 ? totalPeriodo / ventasFilt.length : 0;
+  const unidades    = ventasFilt.flatMap(v => v.lineas ?? []).reduce((s, l) => s + (l?.cantidad ?? 0), 0);
+
+  const labelPeriodo: Record<Periodo, string> = {
+    hoy: "Ventas de hoy",
+    "7d": "Ventas · 7 días",
+    "30d": "Ventas · 30 días",
+    mes: "Ventas del mes",
+    anio: "Ventas del año",
+  };
+  const labelPeriodoActual = labelPeriodo[periodo] ?? "Ventas del periodo";
 
   const prodMap = useMemo(() =>
     Object.fromEntries(productos.map(p => [p.id, p])),
@@ -1921,8 +1931,8 @@ const DashVentas = memo(function DashVentas({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard icon={<IconCalendar className="h-5 w-5" />} label="Ventas del día"    value={`Gs. ${formatGsFull(totalHoy)}`}
           sub={`${ventasHoy.length} transacciones`} color="text-blue-600" />
-        <KpiCard icon={<IconCalendarDays className="h-5 w-5" />} label="Ventas del mes"    value={`Gs. ${formatGsFull(totalMes)}`}
-          sub={`${ventasMes.length} transacciones`} color="text-indigo-600" />
+        <KpiCard icon={<IconCalendarDays className="h-5 w-5" />} label={labelPeriodoActual}    value={`Gs. ${formatGsFull(totalPeriodo)}`}
+          sub={`${ventasFilt.length} transacciones`} color="text-indigo-600" />
         <KpiCard icon={<IconReceipt className="h-5 w-5" />} label="Ticket promedio"   value={`Gs. ${formatGsFull(ticketProm)}`}
           sub={`periodo: ${periodo}`} />
         <KpiCard icon={<IconShoppingBag className="h-5 w-5" />} label="Unidades vendidas" value={formatGs(unidades)}
