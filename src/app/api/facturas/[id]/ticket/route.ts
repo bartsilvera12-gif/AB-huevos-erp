@@ -86,9 +86,14 @@ export async function GET(
       .eq("empresa_id", auth.empresa_id)
       .maybeSingle();
     if (errFe || !fe) return NextResponse.json(errorResponse("Sin documento electrónico."), { status: 404 });
-    if (String(fe.estado_sifen) !== "aprobado") {
-      return NextResponse.json(errorResponse("El ticket solo está disponible con SIFEN «aprobado»."), { status: 403 });
+    // Permitimos imprimir en 'aprobado' Y en 'enviado' (SET aún procesando el lote).
+    // Con 'enviado' ya existe el XML firmado y el CDC — el ticket es válido pero
+    // se marca como "PENDIENTE DE APROBACIÓN" en el header (más abajo).
+    const estadoSifen = String(fe.estado_sifen ?? "");
+    if (estadoSifen !== "aprobado" && estadoSifen !== "enviado") {
+      return NextResponse.json(errorResponse(`El ticket solo está disponible con SIFEN «aprobado» o «enviado» (estado actual: ${estadoSifen || "desconocido"}).`), { status: 403 });
     }
+    const esProvisorio = estadoSifen === "enviado";
 
     const xmlPath = String(fe.xml_firmado_path ?? "").trim();
     if (!xmlPath) return NextResponse.json(errorResponse("Sin XML firmado."), { status: 400 });
@@ -104,7 +109,7 @@ export async function GET(
       width: widthMm === 58 ? 180 : 220,
     });
 
-    const html = renderTicketHtml({ widthMm, parsed, qrDataUri, qrUrl, empresa: EMPRESA_DOC });
+    const html = renderTicketHtml({ widthMm, parsed, qrDataUri, qrUrl, empresa: EMPRESA_DOC, esProvisorio });
     return new NextResponse(html, {
       status: 200,
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
@@ -123,8 +128,9 @@ function renderTicketHtml(opts: {
   qrDataUri: string;
   qrUrl: string;
   empresa: typeof EMPRESA_DOC;
+  esProvisorio?: boolean;
 }): string {
-  const { widthMm, parsed, qrDataUri, qrUrl, empresa } = opts;
+  const { widthMm, parsed, qrDataUri, qrUrl, empresa, esProvisorio } = opts;
   const p = parsed;
   const fs = widthMm === 58 ? 9 : 10;
   const rucCompleto = `${p.emisor.dRucEm}-${p.emisor.dDVEmi}`;
@@ -249,11 +255,17 @@ function renderTicketHtml(opts: {
   <div class="cdc center">${esc(fmtCdc(p.cdc))}</div>
 
   <div class="footer">
-    Documento electrónico aprobado por SET.<br/>
-    Este ticket es equivalente al KuDE oficial.<br/>
+    ${esProvisorio
+      ? `<strong style="color:#b45309">DOCUMENTO PROVISORIO</strong><br/>Enviado a SET · pendiente de aprobación.<br/>Reimprimir cuando SIFEN confirme.<br/>`
+      : `Documento electrónico aprobado por SET.<br/>Este ticket es equivalente al KuDE oficial.<br/>`}
     ${esc(fmtFechaHoraUTC(new Date().toISOString()))}
   </div>
 </div>
+
+${esProvisorio ? `
+<div style="position:fixed;top:6px;left:0;right:0;text-align:center;pointer-events:none;">
+  <span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #f59e0b;padding:2px 8px;font-size:11px;font-weight:700;border-radius:3px;letter-spacing:.05em">PROVISORIO · pendiente SIFEN</span>
+</div>` : ""}
 
 <div class="actions">
   <button type="button" onclick="window.print()">🖨 Imprimir</button>
