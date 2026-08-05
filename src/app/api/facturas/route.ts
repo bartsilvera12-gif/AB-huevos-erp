@@ -66,10 +66,55 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Enriquecer con estado SIFEN (join factura_electronica por factura_id)
+    // y con el nombre del cliente (join clientes por cliente_id). Sin esto,
+    // el listado sale con "SIN ESTADO" y cliente vacío aunque los datos existan.
+    const estadoSifenPorFactura = new Map<string, string>();
+    if (ids.length > 0) {
+      const feQ = await supabase
+        .from("factura_electronica")
+        .select("factura_id, estado_sifen")
+        .eq("empresa_id", auth.empresa_id)
+        .in("factura_id", ids);
+      if (!feQ.error && Array.isArray(feQ.data)) {
+        for (const r of feQ.data as Array<{ factura_id?: string; estado_sifen?: string | null }>) {
+          if (r.factura_id) estadoSifenPorFactura.set(String(r.factura_id), String(r.estado_sifen ?? ""));
+        }
+      }
+    }
+
+    const clienteIds = Array.from(
+      new Set(
+        facturas
+          .map((f) => (typeof f.cliente_id === "string" ? f.cliente_id : null))
+          .filter((x): x is string => Boolean(x))
+      )
+    );
+    const nombrePorCliente = new Map<string, string>();
+    if (clienteIds.length > 0) {
+      const cQ = await supabase
+        .from("clientes")
+        .select("id, nombre, empresa")
+        .eq("empresa_id", auth.empresa_id)
+        .in("id", clienteIds);
+      if (!cQ.error && Array.isArray(cQ.data)) {
+        for (const c of cQ.data as Array<{ id: string; nombre: string | null; empresa: string | null }>) {
+          const n = (c.empresa && c.empresa.trim()) || (c.nombre && c.nombre.trim()) || "";
+          if (n) nombrePorCliente.set(c.id, n);
+        }
+      }
+    }
+
     const enriched = facturas.map((row) => {
       const rid = typeof row.id === "string" ? row.id : "";
       const fp = rid ? lastPagoByFactura.get(rid) ?? null : null;
-      return { ...row, fecha_pago_registro: fp };
+      const cid = typeof row.cliente_id === "string" ? row.cliente_id : "";
+      return {
+        ...row,
+        fecha_pago_registro: fp,
+        estado_sifen: rid ? estadoSifenPorFactura.get(rid) ?? null : null,
+        cliente_nombre: cid ? nombrePorCliente.get(cid) ?? null : null,
+      };
     });
 
     return NextResponse.json(successResponse(enriched));
