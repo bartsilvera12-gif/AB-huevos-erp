@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
-import { ArrowLeft, ChevronRight, FileText, Printer } from "lucide-react";
+import { ArrowLeft, ChevronRight, FileText, Printer, Download } from "lucide-react";
 
 type FacturaRow = {
   id: string;
@@ -104,6 +104,39 @@ export default function FacturasHistorialPage() {
     setAbiertos(next);
   }
 
+  // Exportar a CSV (Excel abre CSV con ; como separador en locales es).
+  function descargarCsv(filas: FacturaRow[], nombreArchivo: string) {
+    const headers = ["N° Factura", "Fecha", "Cliente", "SIFEN", "Monto", "Saldo", "Moneda", "Tipo"];
+    const escape = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      if (s.includes(";") || s.includes("\n") || s.includes('"')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const rows = filas.map((f) => [
+      f.numero_factura ?? "",
+      fmtFecha(f.fecha ?? f.fecha_emision),
+      f.cliente_display ?? f.cliente_nombre ?? "",
+      estadoSifen(f) || "sin estado",
+      Math.round(Number(f.monto ?? f.total) || 0),
+      Math.round(Number(f.saldo) || 0),
+      f.moneda ?? "GS",
+      f.tipo ?? "",
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map(escape).join(";")).join("\n");
+    // BOM UTF-8 para que Excel reconozca acentos.
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   const estadoSifen = (f: FacturaRow): string => {
     return String(f.factura_electronica?.estado_sifen ?? f.estado_sifen ?? "").trim();
   };
@@ -125,13 +158,24 @@ export default function FacturasHistorialPage() {
             <p className="text-sm text-slate-500">Agrupado por mes. Cada factura se puede imprimir en ticket 80/58mm o A4 PDF.</p>
           </div>
         </div>
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por número o cliente…"
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm w-72"
-        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => descargarCsv(filtradas, `facturas-todas-${new Date().toISOString().slice(0,10)}.csv`)}
+            disabled={filtradas.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Descargar todas las facturas como CSV (Excel)"
+          >
+            <Download className="h-4 w-4" /> Descargar todo (CSV)
+          </button>
+          <input
+            type="text"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por número o cliente…"
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm w-72"
+          />
+        </div>
       </div>
 
       {error && <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
@@ -148,21 +192,31 @@ export default function FacturasHistorialPage() {
             const abierto = abiertos.has(g.ym);
             return (
               <div key={g.ym} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => toggle(g.ym)}
-                  className="w-full flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50 transition-colors text-left"
-                >
-                  <div className="flex items-center gap-2">
+                <div className="w-full flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => toggle(g.ym)}
+                    className="flex items-center gap-2 flex-1 text-left"
+                  >
                     <ChevronRight className={`h-4 w-4 text-slate-400 transition-transform ${abierto ? "rotate-90" : ""}`} />
                     <span className="font-semibold text-slate-800">{ymLabel(g.ym)}</span>
                     <span className="text-xs text-slate-500">· {g.count} factura{g.count === 1 ? "" : "s"}</span>
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); descargarCsv(g.filas, `facturas-${g.ym}.csv`); }}
+                      className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                      title={`Descargar CSV de ${ymLabel(g.ym)}`}
+                    >
+                      <Download className="h-3 w-3" /> CSV
+                    </button>
+                    <div className="text-right">
+                      <span className="text-xs uppercase text-slate-400 mr-2">Total del mes</span>
+                      <span className="font-bold tabular-nums text-slate-900">{fmtGs(g.total)}</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs uppercase text-slate-400 mr-2">Total del mes</span>
-                    <span className="font-bold tabular-nums text-slate-900">{fmtGs(g.total)}</span>
-                  </div>
-                </button>
+                </div>
                 {abierto && (
                   <div className="border-t border-slate-100 overflow-x-auto">
                     <table className="w-full text-sm">
