@@ -301,12 +301,21 @@ export default function VentasPage() {
 
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-semibold">Órdenes de venta</h2>
-          <Link
-            href="/ventas/nueva"
-            className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
-          >
-            + Nueva venta
-          </Link>
+          <div className="inline-flex items-center gap-2">
+            <Link
+              href="/facturas"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              title="Historial de facturas por mes (imprimibles)"
+            >
+              📁 Historial de facturas
+            </Link>
+            <Link
+              href="/ventas/nueva"
+              className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+            >
+              + Nueva venta
+            </Link>
+          </div>
         </div>
 
         {/* Filtros */}
