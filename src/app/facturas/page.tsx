@@ -203,6 +203,14 @@ export default function FacturasHistorialPage() {
                     <span className="text-xs text-slate-500">· {g.count} factura{g.count === 1 ? "" : "s"}</span>
                   </button>
                   <div className="flex items-center gap-3">
+                    <a
+                      href={`/api/facturas/mes/${g.ym}/pdf`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-800 hover:bg-rose-100"
+                      title={`Descargar todas las facturas aprobadas de ${ymLabel(g.ym)} en un PDF único`}
+                    >
+                      <Download className="h-3 w-3" /> PDF único
+                    </a>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); descargarCsv(g.filas, `facturas-${g.ym}.csv`); }}
