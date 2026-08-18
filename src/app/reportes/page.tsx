@@ -2,7 +2,7 @@
 
 import PageHeader from "@/components/ui/PageHeader";
 import { ReportCard } from "@/components/reportes/ReportCard";
-import { Wallet, Truck, Package, ShoppingCart, ArrowLeftRight } from "lucide-react";
+import { Wallet, Truck, Package, ShoppingCart, ArrowLeftRight, Egg } from "lucide-react";
 
 /** Hub de reportería operativa (Fase 1: Estado de cuenta + Proveedores). */
 export default function ReportesPage() {
@@ -49,6 +49,15 @@ export default function ReportesPage() {
             icon={Truck}
             description="Resumen de proveedores, compras por proveedor y actividad del mes."
             href="/reportes/proveedores"
+          />
+        </li>
+        <li>
+          <ReportCard
+            title="Clasificación"
+            subtitle="Producción y calidad del huevo"
+            icon={Egg}
+            description="Total por clasificación en un rango de fechas, con porcentaje, total general y comparativo contra el período anterior."
+            href="/reportes/clasificacion"
           />
         </li>
         <li>

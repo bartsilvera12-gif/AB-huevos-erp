@@ -96,3 +96,40 @@ export function mesesRecientesAsuncion(n: number, now: Date = new Date()): strin
 export function normalizarMes(mes?: string | null): string {
   return mes && /^\d{4}-\d{2}$/.test(mes) ? mes : mesActualAsuncion();
 }
+
+/** Hoy en Asunción como `YYYY-MM-DD`. */
+export function hoyAsuncion(now: Date = new Date()): string {
+  return asuncionYmd(now);
+}
+
+/** Valida formato `YYYY-MM-DD`; si no, devuelve null. */
+export function normalizarFecha(f?: string | null): string | null {
+  return f && /^\d{4}-\d{2}-\d{2}$/.test(f) ? f : null;
+}
+
+/** Suma (o resta, con n negativo) días a un `YYYY-MM-DD` sin tocar zona horaria. */
+export function sumarDias(ymd: string, n: number): string {
+  const d = new Date(`${ymd}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Días (inclusive) entre dos `YYYY-MM-DD`. */
+export function diasEntre(desde: string, hasta: string): number {
+  const a = new Date(`${desde}T12:00:00.000Z`).getTime();
+  const b = new Date(`${hasta}T12:00:00.000Z`).getTime();
+  return Math.round((b - a) / 86_400_000) + 1;
+}
+
+/**
+ * Semana lunes→domingo que contiene "hoy" en Asunción, desplazada `offset`
+ * semanas (0 = semana actual, -1 = semana pasada).
+ */
+export function semanaAsuncion(offset = 0, now: Date = new Date()): { desde: string; hasta: string } {
+  const hoy = asuncionYmd(now);
+  // getUTCDay: 0=domingo … 6=sábado. Queremos lunes como inicio.
+  const dow = new Date(`${hoy}T12:00:00.000Z`).getUTCDay();
+  const haciaLunes = dow === 0 ? -6 : 1 - dow;
+  const lunes = sumarDias(hoy, haciaLunes + offset * 7);
+  return { desde: lunes, hasta: sumarDias(lunes, 6) };
+}

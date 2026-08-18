@@ -188,3 +188,47 @@ export interface ConciliacionReporte {
   porEntidad: ConciliacionAgrupado[];
   movimientos: ConciliacionMovRow[];
 }
+
+// ── Clasificación por período (granja) ───────────────────────────────────────
+
+/** Una fila del desglose: cuántos huevos salieron de esa clasificación. */
+export interface ClasificacionTipoTotal {
+  tipo_huevo_id: string;
+  codigo: number;
+  nombre: string;
+  cantidad: number;       // huevos clasificados en el período
+  planchas: number;       // cantidad / 30 (piso)
+  sobrantes: number;      // resto de la división
+  porcentaje: number;     // sobre el total clasificado del período (0-100)
+  /** Cantidad del mismo tipo en el período anterior comparable. */
+  cantidadAnterior: number;
+  /** Variación % vs. período anterior. null si el anterior fue 0. */
+  variacion: number | null;
+}
+
+/** Una clasificación registrada dentro del período (detalle auditable). */
+export interface ClasificacionDetalleRow {
+  clasificacion_id: string;
+  produccion_codigo: number;
+  galpon: string;
+  fecha: string;              // fecha de la producción
+  huevos_producidos: number;
+  bajas: number;
+  clasificado: number;        // suma del detalle
+  stock_aplicado: boolean;
+}
+
+export interface ClasificacionReporte {
+  desde: string;              // YYYY-MM-DD (Asunción)
+  hasta: string;              // YYYY-MM-DD (Asunción)
+  /** Período anterior de igual longitud, usado para el comparativo. */
+  anterior: { desde: string; hasta: string; totalClasificado: number };
+  totalClasificado: number;   // huevos
+  totalPlanchas: number;
+  huevosProducidos: number;   // SUM(granja_producciones.cantidad_huevos)
+  bajas: number;
+  cantidadProducciones: number;
+  produccionesSinClasificar: number;
+  porTipo: ClasificacionTipoTotal[];
+  clasificaciones: ClasificacionDetalleRow[];
+}
