@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Egg, ListChecks, Layers, Sparkles, PiggyBank, Tags } from "lucide-react";
 import { fetchDepositos, fetchStockDeposito } from "@/lib/multideposito/client";
+import DateTimePickerField from "@/components/ui/DateTimePickerField";
 
 type TipoHuevo = { id: string; codigo: number; nombre: string; producto_id?: string | null };
 type ProduccionOpt = { id: string; codigo: number; galpon: string; fecha: string; cantidad_huevos: number; bajas: number; responsable: string };
@@ -1036,18 +1037,8 @@ function ModalNueva({
   async function crear() {
     if (!produccionId) { setError("Seleccioná una producción."); return; }
     setPendiente(true); setError(null);
-    // fechaDist llega en formato "dd/mm/aaaa hh:mm" (texto libre). Lo parseamos
-    // acá para no depender del picker nativo del navegador, que dentro del
-    // modal se desborda y tapa otros campos.
-    let fechaIso: string | null = null;
-    if (fechaDist.trim()) {
-      const m = fechaDist.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
-      if (!m) { setError("Fecha inválida. Usá el formato dd/mm/aaaa hh:mm o hacé clic en Hoy."); setPendiente(false); return; }
-      const [, dd, mm, yyyy, hh = "00", mi = "00"] = m;
-      const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi));
-      if (isNaN(d.getTime())) { setError("Fecha inválida."); setPendiente(false); return; }
-      fechaIso = d.toISOString();
-    }
+    // El picker propio guarda "YYYY-MM-DDTHH:mm" (hora local); la API espera ISO UTC.
+    const fechaIso = fechaDist ? new Date(fechaDist).toISOString() : null;
     const r = await onCrear(produccionId, respDist.trim(), fechaIso);
     setPendiente(false);
     if (!r.ok) setError(r.error ?? "Error al crear");
@@ -1119,34 +1110,9 @@ function ModalNueva({
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-600">Fecha distribución</label>
-                {/*
-                  Input de texto en vez de datetime-local: el picker nativo del
-                  navegador no se puede reposicionar por CSS y, dentro de este
-                  modal, siempre termina tapando algún otro campo.
-                */}
-                <div className="mt-1 flex gap-1">
-                  <input
-                    type="text"
-                    value={fechaDist}
-                    onChange={(e) => setFechaDist(e.target.value)}
-                    placeholder="dd/mm/aaaa hh:mm"
-                    inputMode="numeric"
-                    className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date();
-                      const pad = (n: number) => String(n).padStart(2, "0");
-                      setFechaDist(`${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`);
-                    }}
-                    className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
-                    title="Ahora"
-                  >
-                    Hoy
-                  </button>
+                <div className="mt-1">
+                  <DateTimePickerField value={fechaDist} onChange={setFechaDist} />
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">Dejalo vacío o hacé clic en Hoy.</p>
               </div>
             </div>
           </div>
