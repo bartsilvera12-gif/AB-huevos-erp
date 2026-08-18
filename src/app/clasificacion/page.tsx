@@ -1047,7 +1047,7 @@ function ModalNueva({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 px-4 py-8 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Nueva clasificación</h3>
@@ -1092,7 +1092,23 @@ function ModalNueva({
 
           <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Distribución (opcional)</p>
-            <div className="grid grid-cols-2 gap-3">
+            {/*
+              Los dos campos van apilados y a lo ancho, con la fecha al final: el
+              calendario nativo del navegador se ancla al input y no se puede
+              reposicionar por CSS, así que si va angosto y arriba se desborda del
+              modal y tapa el campo de al lado.
+            */}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-600">Resp. distribución</label>
+                <input
+                  type="text"
+                  value={respDist}
+                  onChange={(e) => setRespDist(e.target.value)}
+                  placeholder="Ej: luzovelar"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
               <div>
                 <label className="text-xs font-medium text-slate-600">Fecha distribución</label>
                 <div className="mt-1 flex gap-1">
@@ -1109,22 +1125,12 @@ function ModalNueva({
                       const pad = (n: number) => String(n).padStart(2, "0");
                       setFechaDist(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`);
                     }}
-                    className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
                     title="Ahora"
                   >
                     Hoy
                   </button>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600">Resp. distribución</label>
-                <input
-                  type="text"
-                  value={respDist}
-                  onChange={(e) => setRespDist(e.target.value)}
-                  placeholder="Ej: luzovelar"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                />
               </div>
             </div>
           </div>
