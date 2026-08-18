@@ -122,7 +122,11 @@ export default function DateTimePickerField({
           ref={popupRef}
           style={{ position: "fixed", left: pos?.left ?? -9999, top: pos?.top ?? -9999, zIndex: 200 }}
           className="w-[320px] rounded-xl border border-slate-200 bg-white p-3 shadow-2xl ring-1 ring-slate-100"
+          // Los eventos sintéticos de React burbujean por el árbol de componentes
+          // aunque estemos en un portal — sin esto, un click en el calendario
+          // dispara el onClick del backdrop del modal y lo cierra.
           onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
           <Calendario
             viewMonth={viewMonth}
