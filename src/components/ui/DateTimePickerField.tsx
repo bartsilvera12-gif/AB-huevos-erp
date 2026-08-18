@@ -17,7 +17,7 @@ import { createPortal } from "react-dom";
 export default function DateTimePickerField({
   value,
   onChange,
-  placeholder = "dd/mm/aaaa hh:mm",
+  placeholder = "dd/mm/aaaa",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -87,15 +87,13 @@ export default function DateTimePickerField({
   }, [open]);
 
   function seleccionarDia(y: number, m: number, d: number) {
-    const [hh, mi] = parsed ? [parsed.getHours(), parsed.getMinutes()] : [0, 0];
-    onChange(toIso(new Date(y, m, d, hh, mi)));
-  }
-  function cambiarHora(hh: number, mi: number) {
-    const base = parsed ?? new Date();
-    onChange(toIso(new Date(base.getFullYear(), base.getMonth(), base.getDate(), hh, mi)));
+    onChange(toIso(new Date(y, m, d, 0, 0)));
+    setOpen(false);
   }
   function ponerHoy() {
-    onChange(toIso(new Date()));
+    const n = new Date();
+    onChange(toIso(new Date(n.getFullYear(), n.getMonth(), n.getDate(), 0, 0)));
+    setOpen(false);
   }
   function limpiar() {
     onChange("");
@@ -134,27 +132,17 @@ export default function DateTimePickerField({
             selected={parsed}
             onSelect={seleccionarDia}
           />
-          <SelectorHora parsed={parsed} onChange={cambiarHora} />
           <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2">
             <button type="button" onClick={limpiar} className="text-xs text-slate-500 hover:text-rose-600">
               Limpiar
             </button>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={ponerHoy}
-                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Hoy
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900"
-              >
-                Listo
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={ponerHoy}
+              className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Hoy
+            </button>
           </div>
         </div>,
         document.body
@@ -318,5 +306,5 @@ function parseIso(v: string): Date | null {
 
 function formatoLegible(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
