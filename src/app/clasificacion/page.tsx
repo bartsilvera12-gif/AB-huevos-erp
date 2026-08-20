@@ -81,36 +81,60 @@ export default function ClasificacionPage() {
     setCargando(true);
     setErrorGeneral(null);
     try {
-      const [rC, rT, rPr, rS, rP] = await Promise.all([
-        fetch("/api/granja/clasificaciones", { cache: "no-store" }),
-        fetch("/api/granja/tipos-huevo", { cache: "no-store" }),
-        fetch("/api/granja/producciones", { cache: "no-store" }),
-        fetch("/api/granja/sueltos", { cache: "no-store" }),
-        fetch("/api/productos", { cache: "no-store" }),
-      ]);
-      // Si el backend está caído o hay un 502 de Cloudflare, la respuesta viene
-      // en HTML: parsear como JSON tira SyntaxError con el HTML entero como
-      // "contexto", y termina pintado como texto en pantalla. Detectamos el
-      // caso antes de intentar el parseo y mostramos un mensaje entendible.
-      const responses = { "clasificaciones": rC, "tipos": rT, "producciones": rPr, "sueltos": rS, "productos": rP };
-      for (const [label, r] of Object.entries(responses)) {
-        const ct = r.headers.get("content-type") ?? "";
-        if (!ct.includes("application/json")) {
-          throw new Error(`No se pudo cargar ${label} (${r.status}). Reintentá en unos segundos.`);
+      // Cargamos cada endpoint por separado para saber cuál falla y no perder
+      // toda la pantalla si uno solo tira error. Sanitizamos cualquier mensaje
+      // que pueda venir con HTML (p.ej. respuestas de un 502 de Cloudflare).
+      const endpoints = [
+        { label: "clasificaciones", url: "/api/granja/clasificaciones", req: true },
+        { label: "tipos",           url: "/api/granja/tipos-huevo",     req: true },
+        { label: "producciones",    url: "/api/granja/producciones",    req: true },
+        { label: "sueltos",         url: "/api/granja/sueltos",         req: true },
+        { label: "productos",       url: "/api/productos",              req: false },
+      ] as const;
+
+      const cargados: Record<string, unknown> = {};
+      const fallidos: string[] = [];
+      await Promise.all(endpoints.map(async ({ label, url, req }) => {
+        try {
+          const r = await fetch(url, { cache: "no-store" });
+          const ct = r.headers.get("content-type") ?? "";
+          if (!ct.includes("application/json")) {
+            console.error("[clasificacion]", url, r.status, "content-type inválido:", ct);
+            if (req) fallidos.push(`${label} (${r.status})`);
+            return;
+          }
+          const j = await r.json().catch(() => null) as Record<string, unknown> | null;
+          if (!r.ok || !j) {
+            const jRec = j as { error?: string | { message?: string } } | null;
+            const jErr = jRec?.error;
+            const msg = typeof jErr === "string" ? jErr : jErr?.message;
+            console.error("[clasificacion]", url, r.status, msg ?? "sin mensaje");
+            if (req) fallidos.push(`${label} (${r.status})`);
+            return;
+          }
+          cargados[label] = j;
+        } catch (fetchErr) {
+          console.error("[clasificacion] fetch", url, fetchErr);
+          if (req) fallidos.push(`${label} (red)`);
         }
+      }));
+
+      if (fallidos.length > 0) {
+        throw new Error(`No se pudo cargar: ${fallidos.join(", ")}. Reintentá en unos segundos.`);
       }
-      const [jC, jT, jPr, jS, jP] = await Promise.all([rC.json(), rT.json(), rPr.json(), rS.json(), rP.json()]);
-      if (!rC.ok) throw new Error(jC?.error?.message ?? jC?.error ?? "Error cargando clasificaciones");
-      if (!rT.ok) throw new Error(jT?.error?.message ?? jT?.error ?? "Error cargando tipos");
-      if (!rPr.ok) throw new Error(jPr?.error?.message ?? jPr?.error ?? "Error cargando producciones");
-      if (!rS.ok) throw new Error(jS?.error?.message ?? jS?.error ?? "Error cargando sueltos");
+
+      const jC  = cargados["clasificaciones"] as { data?: { clasificaciones?: Clasificacion[] } };
+      const jT  = cargados["tipos"]           as { data?: { tipos?: TipoHuevo[] } };
+      const jPr = cargados["producciones"]    as { data?: { producciones?: Array<{ id: string; codigo: number; galpon: string; fecha: string; cantidad_huevos: number; bajas: number; responsable: string; clasificada?: boolean }> } };
+      const jS  = cargados["sueltos"]         as { data?: { acumulador?: Record<string, number> } };
+      const jP  = cargados["productos"]       as { data?: { productos?: Array<{ id: string; nombre: string; sku: string | null }> } } | undefined;
       setClasificaciones(jC.data?.clasificaciones ?? []);
       setTipos(jT.data?.tipos ?? []);
-      const producciones = (jPr.data?.producciones ?? []) as Array<{ id: string; codigo: number; galpon: string; fecha: string; cantidad_huevos: number; bajas: number; responsable: string; clasificada?: boolean }>;
+      const producciones = jPr.data?.producciones ?? [];
       setProduccionesSinClasificar(producciones.filter((p) => !p.clasificada));
       setAcumulador(jS.data?.acumulador ?? {});
-      if (rP.ok) {
-        setProductos((jP.data?.productos ?? []).map((p: { id: string; nombre: string; sku: string | null }) => ({ id: p.id, nombre: p.nombre, sku: p.sku })));
+      if (jP) {
+        setProductos((jP.data?.productos ?? []).map((p) => ({ id: p.id, nombre: p.nombre, sku: p.sku })));
       }
       // Cargar stock por depósito (Central + Abasto Norte) para mostrar bajo cada tipo.
       try {
