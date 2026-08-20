@@ -4,6 +4,7 @@ import {
   type AppSupabaseClient,
 } from "@/lib/supabase/schema";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
+import { makeRetryFetch } from "@/lib/supabase/retry-fetch";
 
 /**
  * Instancia dedicada monocliente: no consulta `empresas.data_schema`.
@@ -24,6 +25,7 @@ export function createServiceRoleClientWithDbSchema(schema: string): AppSupabase
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
     db: { schema },
+    global: { fetch: makeRetryFetch() },
   }) as AppSupabaseClient;
 }
 

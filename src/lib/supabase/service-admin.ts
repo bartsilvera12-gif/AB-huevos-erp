@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServiceRoleClientOptions, type AppSupabaseClient } from "@/lib/supabase/schema";
+import { makeRetryFetch } from "@/lib/supabase/retry-fetch";
 
 /**
  * Singleton del cliente service-role.
@@ -37,7 +38,10 @@ export function createServiceRoleClient(): AppSupabaseClient {
     throw new Error("Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY");
   }
 
-  const client = createClient(url, key, { ...supabaseServiceRoleClientOptions }) as AppSupabaseClient;
+  const client = createClient(url, key, {
+    ...supabaseServiceRoleClientOptions,
+    global: { fetch: makeRetryFetch() },
+  }) as AppSupabaseClient;
   writeGlobalServiceRoleClient(client);
   return client;
 }
