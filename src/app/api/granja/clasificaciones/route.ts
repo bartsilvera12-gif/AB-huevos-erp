@@ -17,11 +17,14 @@ export async function GET(request: NextRequest) {
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const { supabase, auth } = ctx;
 
+    console.log("[DEBUG granja/clasificaciones] empresa_id:", auth.empresa_id, "url:", process.env.NEXT_PUBLIC_SUPABASE_URL, "schema:", process.env.NEURA_CLIENT_SCHEMA);
+    const t0 = Date.now();
     const { data: heads, error } = await supabase
       .from("granja_clasificaciones")
       .select(`${COLS}, granja_producciones!inner(id, codigo, galpon_id, fecha, cantidad_huevos, bajas, responsable)`)
       .eq("empresa_id", auth.empresa_id)
       .order("created_at", { ascending: false });
+    console.log("[DEBUG granja/clasificaciones] query1 ms:", Date.now() - t0, "rows:", heads?.length ?? "null", "error:", error?.message ?? "none");
     if (error) return NextResponse.json(errorResponse(error.message), { status: 400 });
 
     type ProdEmb = { id: string; codigo: number; galpon_id: string; fecha: string; cantidad_huevos: number; bajas: number; responsable: string };
@@ -91,7 +94,10 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(successResponse({ clasificaciones }));
   } catch (err) {
-    return NextResponse.json(errorResponse(err instanceof Error ? err.message : "Error"), { status: 500 });
+    const msg = err instanceof Error ? err.message : "Error";
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[ERROR granja/clasificaciones]", { msgPreview: msg.slice(0, 300), msgLen: msg.length, stack: stack?.split("\n").slice(0, 5).join(" | ") });
+    return NextResponse.json(errorResponse(msg), { status: 500 });
   }
 }
 
