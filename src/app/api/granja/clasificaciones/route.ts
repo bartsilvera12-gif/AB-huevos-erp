@@ -54,16 +54,25 @@ export async function GET(request: NextRequest) {
       }, {} as Record<string, string>);
     }
 
-    // Detalle por clasificación
+    // Detalle por clasificación. Con muchas clasificaciones (>30) la URL con
+    // todos los IDs supera el límite del gateway (~4KB) y Cloudflare rechaza
+    // con 502. Batcheamos de a 30 IDs por request.
     const clasIds = rows.map((r) => r.id);
     let detalleMap: Record<string, Array<{ tipo_huevo_id: string; cantidad: number; planchas_generadas: number; unidades_sobrantes: number }>> = {};
     if (clasIds.length > 0) {
-      const dQ = await supabase
-        .from("granja_clasificacion_detalle")
-        .select("clasificacion_id, tipo_huevo_id, cantidad, planchas_generadas, unidades_sobrantes")
-        .in("clasificacion_id", clasIds);
-      if (dQ.error) throw new Error(dQ.error.message);
-      detalleMap = ((dQ.data ?? []) as Array<{ clasificacion_id: string; tipo_huevo_id: string; cantidad: number; planchas_generadas: number; unidades_sobrantes: number }>).reduce((acc, d) => {
+      const CHUNK = 30;
+      type DetRow = { clasificacion_id: string; tipo_huevo_id: string; cantidad: number; planchas_generadas: number; unidades_sobrantes: number };
+      const all: DetRow[] = [];
+      for (let i = 0; i < clasIds.length; i += CHUNK) {
+        const grupo = clasIds.slice(i, i + CHUNK);
+        const dQ = await supabase
+          .from("granja_clasificacion_detalle")
+          .select("clasificacion_id, tipo_huevo_id, cantidad, planchas_generadas, unidades_sobrantes")
+          .in("clasificacion_id", grupo);
+        if (dQ.error) throw new Error(dQ.error.message);
+        all.push(...((dQ.data ?? []) as DetRow[]));
+      }
+      detalleMap = all.reduce((acc, d) => {
         (acc[d.clasificacion_id] ??= []).push({
           tipo_huevo_id: d.tipo_huevo_id,
           cantidad: d.cantidad,
