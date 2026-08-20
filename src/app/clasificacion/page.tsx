@@ -88,6 +88,17 @@ export default function ClasificacionPage() {
         fetch("/api/granja/sueltos", { cache: "no-store" }),
         fetch("/api/productos", { cache: "no-store" }),
       ]);
+      // Si el backend está caído o hay un 502 de Cloudflare, la respuesta viene
+      // en HTML: parsear como JSON tira SyntaxError con el HTML entero como
+      // "contexto", y termina pintado como texto en pantalla. Detectamos el
+      // caso antes de intentar el parseo y mostramos un mensaje entendible.
+      const responses = { "clasificaciones": rC, "tipos": rT, "producciones": rPr, "sueltos": rS, "productos": rP };
+      for (const [label, r] of Object.entries(responses)) {
+        const ct = r.headers.get("content-type") ?? "";
+        if (!ct.includes("application/json")) {
+          throw new Error(`No se pudo cargar ${label} (${r.status}). Reintentá en unos segundos.`);
+        }
+      }
       const [jC, jT, jPr, jS, jP] = await Promise.all([rC.json(), rT.json(), rPr.json(), rS.json(), rP.json()]);
       if (!rC.ok) throw new Error(jC?.error?.message ?? jC?.error ?? "Error cargando clasificaciones");
       if (!rT.ok) throw new Error(jT?.error?.message ?? jT?.error ?? "Error cargando tipos");
@@ -124,7 +135,13 @@ export default function ClasificacionPage() {
         }
       } catch { /* no fatal */ }
     } catch (e) {
-      setErrorGeneral(e instanceof Error ? e.message : "Error");
+      // Último resguardo: si el mensaje parece HTML (o es muy largo), no lo
+      // pintamos en pantalla — mostramos algo entendible al usuario.
+      const raw = e instanceof Error ? e.message : "Error";
+      const looksLikeHtml = /<!doctype|<html|<body|<head|<div/i.test(raw);
+      setErrorGeneral(looksLikeHtml || raw.length > 240
+        ? "No se pudo cargar la clasificación. Reintentá en unos segundos."
+        : raw);
     } finally {
       setCargando(false);
     }
