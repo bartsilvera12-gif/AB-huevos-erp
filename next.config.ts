@@ -9,7 +9,6 @@ const nextConfig: NextConfig = {
   // y mata el build. Ya validamos tipos con `tsc --noEmit` antes de commitear,
   // así que el paso de next build es redundante.
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
 
   // gzip de respuestas en produccion. Es el default pero declararlo explicito
   // evita sorpresas si Coolify/Traefik intentan re-comprimir.
