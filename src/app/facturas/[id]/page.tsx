@@ -139,8 +139,8 @@ function FacturaDetalleInner() {
     return (
       <div className="max-w-6xl mx-auto py-20 text-center space-y-3">
         <p className="text-slate-600">Factura no encontrada.</p>
-        <Link href="/ventas" className="text-[#0EA5E9] text-sm font-medium hover:underline">
-          Volver a Caja
+        <Link href="/facturas" className="text-[#0EA5E9] text-sm font-medium hover:underline">
+          Volver a Historial
         </Link>
       </div>
     );
@@ -150,8 +150,8 @@ function FacturaDetalleInner() {
     return (
       <div className="max-w-6xl mx-auto py-20 text-center space-y-3">
         <p className="text-red-600 text-sm">{loadErr ?? "Error"}</p>
-        <Link href="/ventas" className="text-[#0EA5E9] text-sm font-medium hover:underline">
-          Volver
+        <Link href="/facturas" className="text-[#0EA5E9] text-sm font-medium hover:underline">
+          Volver a Historial
         </Link>
       </div>
     );
@@ -164,10 +164,10 @@ function FacturaDetalleInner() {
       <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">
         <div>
           <Link
-            href="/ventas"
+            href="/facturas"
             className="text-xs font-medium text-[#0EA5E9] hover:underline"
           >
-            ← Volver a Caja
+            ← Volver a Historial de facturas
           </Link>
           <h1 className="text-2xl font-bold text-slate-900 mt-1">Factura {factura.numero_factura}</h1>
           <p className="text-sm text-slate-500 mt-0.5">
