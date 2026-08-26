@@ -259,9 +259,14 @@ function FacturaDetalleInner() {
         >
           📄 A4 PDF
         </a>
-        {factura.tipo?.toLowerCase() === "credito" && (
-          <ReciboPagoButton facturaId={factura.id} tieneSaldo={factura.saldo > 0} />
-        )}
+        {/*
+          Antes solo se mostraba para facturas a crédito. Pero una factura
+          contado también puede haberse quedado "Pendiente" (saldo > 0) porque
+          el cobro no se cargó al emitirla, o el cliente quiere reimprimir el
+          recibo del pago. Se muestra siempre.
+        */}
+        <ReciboPagoButton facturaId={factura.id} tieneSaldo={factura.saldo > 0} />
+
       </div>
     </div>
   );
