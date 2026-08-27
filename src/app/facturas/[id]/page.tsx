@@ -273,35 +273,42 @@ function FacturaDetalleInner() {
 }
 
 /**
- * Botón para imprimir el recibo del último cobro de esta factura.
- * Si aún no hay cobros registrados, redirige a /pagos para que el usuario
- * pueda registrar el pago (y desde ahí generar el recibo).
+ * Botón para imprimir el recibo de la factura. Tres caminos:
+ *
+ * 1. Ya hay recibo generado → abre el PDF directo.
+ * 2. Hay cobro registrado pero no recibo → GET /recibo lo genera y devuelve el id.
+ * 3. No hay cobro (típico de facturas CONTADO que no cargaron el pago al
+ *    emitirse) → abre un modal para registrar el pago y generar recibo en un
+ *    solo paso, sin obligar al usuario a irse a /pagos.
  */
 function ReciboPagoButton({ facturaId, tieneSaldo }: { facturaId: string; tieneSaldo: boolean }) {
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [modalOpen, setModalOpen] = React.useState(false);
+
   async function handleClick() {
     setErr(null);
     setBusy(true);
     try {
       const r = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/recibo`, { cache: "no-store" });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j?.data?.recibo_id) {
-        // Si no hay cobros aún, mandar al usuario a /pagos.
-        if (r.status === 404) {
-          window.location.href = "/pagos";
-          return;
-        }
-        setErr(j?.error ?? "No se pudo abrir el recibo.");
+      if (r.ok && j?.data?.recibo_id) {
+        window.open(`/api/recibos-dinero/${j.data.recibo_id}/pdf?auto=1`, "_blank", "noopener");
         return;
       }
-      window.open(`/api/recibos-dinero/${j.data.recibo_id}/pdf?auto=1`, "_blank", "noopener");
+      // 404 = no hay cobro registrado. Abrimos modal para registrar en el momento.
+      if (r.status === 404) {
+        setModalOpen(true);
+        return;
+      }
+      setErr(j?.error ?? "No se pudo abrir el recibo.");
     } catch {
       setErr("Error de red al abrir el recibo.");
     } finally {
       setBusy(false);
     }
   }
+
   return (
     <>
       <button
@@ -314,7 +321,133 @@ function ReciboPagoButton({ facturaId, tieneSaldo }: { facturaId: string; tieneS
         🧾 {tieneSaldo ? "Registrar pago / Recibo" : "Recibo de pago"}
       </button>
       {err && <span className="text-xs text-rose-600 self-center">{err}</span>}
+      {modalOpen && (
+        <RegistrarPagoContadoModal
+          facturaId={facturaId}
+          onClose={() => setModalOpen(false)}
+          onDone={(reciboId) => {
+            setModalOpen(false);
+            window.open(`/api/recibos-dinero/${reciboId}/pdf?auto=1`, "_blank", "noopener");
+            // Refrescar la pantalla para reflejar saldo en 0.
+            window.location.reload();
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/** Modal chico para cargar el pago de una factura y generar el recibo. */
+function RegistrarPagoContadoModal({
+  facturaId,
+  onClose,
+  onDone,
+}: {
+  facturaId: string;
+  onClose: () => void;
+  onDone: (reciboId: string) => void;
+}) {
+  const [metodo, setMetodo] = React.useState<"efectivo" | "transferencia" | "tarjeta" | "otro">("efectivo");
+  const [referencia, setReferencia] = React.useState("");
+  const [titular, setTitular] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  async function guardar() {
+    setErr(null);
+    setBusy(true);
+    try {
+      const r = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/registrar-pago-contado`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          metodo_pago: metodo,
+          referencia: referencia.trim() || undefined,
+          titular: titular.trim() || undefined,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.data?.recibo_id) {
+        setErr(j?.error ?? "No se pudo registrar el pago.");
+        setBusy(false);
+        return;
+      }
+      onDone(j.data.recibo_id);
+    } catch {
+      setErr("Error de red al registrar el pago.");
+      setBusy(false);
+    }
+  }
+
+  const necesitaReferencia = metodo === "transferencia" || metodo === "tarjeta";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-slate-900">Registrar pago</h3>
+        <p className="mt-1 text-xs text-slate-500">
+          Cargá el cobro para esta factura y se genera el recibo al instante.
+        </p>
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className="text-xs font-medium text-slate-600">Método de pago</label>
+            <select
+              value={metodo}
+              onChange={(e) => setMetodo(e.target.value as "efectivo" | "transferencia" | "tarjeta" | "otro")}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            >
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          {necesitaReferencia && (
+            <>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Referencia / N° comprobante</label>
+                <input
+                  type="text"
+                  value={referencia}
+                  onChange={(e) => setReferencia(e.target.value)}
+                  placeholder="Ej: 123456"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">Titular (opcional)</label>
+                <input
+                  type="text"
+                  value={titular}
+                  onChange={(e) => setTitular(e.target.value)}
+                  placeholder="Nombre del titular"
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
+            </>
+          )}
+          {err && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{err}</p>}
+        </div>
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={busy}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+          >
+            {busy ? "Guardando…" : "Guardar e imprimir recibo"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
