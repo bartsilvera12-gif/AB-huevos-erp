@@ -123,47 +123,67 @@ export async function GET(
     const branding = await loadKudeBranding(supabase, auth.empresa_id);
 
     // 3) Generar PDFs individuales y concatenar.
+    //
+    // El paso caro es la descarga del XML firmado por factura. Antes se hacía
+    // serial: con 100+ facturas fácil pasaban 60s y Cloudflare cortaba con
+    // 502 por timeout. Ahora descargamos + generamos PDFs en paralelo de a
+    // 10; el merge sí se hace serial al final (pdf-lib no es thread-safe).
     const merged = await PDFDocument.create();
     const errores: string[] = [];
-    let incluidas = 0;
+    const CONCURRENCIA = 10;
 
-    for (const f of facturas) {
+    type PdfListo = { numero_factura: string; buf: Buffer };
+    const pdfsListos: PdfListo[] = [];
+
+    async function procesarUna(f: { id: string; numero_factura: string }): Promise<void> {
       const fe = feByFactura.get(f.id);
-      if (!fe) { errores.push(`${f.numero_factura}: sin doc electrónico`); continue; }
+      if (!fe) { errores.push(`${f.numero_factura}: sin doc electrónico`); return; }
       if (String(fe.estado_sifen) !== "aprobado") {
         errores.push(`${f.numero_factura}: SIFEN ${fe.estado_sifen ?? "desconocido"}`);
-        continue;
+        return;
       }
       const xmlPath = String(fe.xml_firmado_path ?? "").trim();
-      if (!xmlPath) { errores.push(`${f.numero_factura}: sin XML firmado`); continue; }
+      if (!xmlPath) { errores.push(`${f.numero_factura}: sin XML firmado`); return; }
 
       const dl = await downloadSifenObject(supabase, xmlPath);
-      if (!dl.ok) { errores.push(`${f.numero_factura}: XML no descargable`); continue; }
+      if (!dl.ok) { errores.push(`${f.numero_factura}: XML no descargable`); return; }
 
       let parsed;
       try { parsed = parseKudeFromSignedRdeXml(dl.data.toString("utf8")); }
-      catch { errores.push(`${f.numero_factura}: XML inválido`); continue; }
+      catch { errores.push(`${f.numero_factura}: XML inválido`); return; }
 
       const dProtAut = dProtAutFromConsulta(parsed.cdc, fe.sifen_ultima_respuesta_consulta_lote as SifenConsultaLoteUltimaPersistida | Record<string, unknown> | null);
       const qrUrl = parsed.dCarQR ?? kudeFallbackQrUrl(parsed.cdc);
 
-      let pdfBuf: Buffer;
       try {
-        pdfBuf = await buildKudePdfBuffer({
+        const buf = await buildKudePdfBuffer({
           parsed,
           numeroFactura: f.numero_factura,
           dProtAut,
           qrUrl,
           branding,
         });
-      } catch { errores.push(`${f.numero_factura}: fallo generación PDF`); continue; }
+        pdfsListos.push({ numero_factura: f.numero_factura, buf });
+      } catch { errores.push(`${f.numero_factura}: fallo generación PDF`); }
+    }
 
+    for (let i = 0; i < facturas.length; i += CONCURRENCIA) {
+      const grupo = facturas.slice(i, i + CONCURRENCIA);
+      await Promise.all(grupo.map(procesarUna));
+    }
+
+    // Ordenar por número de factura (fecha ya venía ordenada, mantenemos orden estable)
+    const ordenMap = new Map(facturas.map((f, i) => [f.numero_factura, i] as const));
+    pdfsListos.sort((a, b) => (ordenMap.get(a.numero_factura) ?? 0) - (ordenMap.get(b.numero_factura) ?? 0));
+
+    let incluidas = 0;
+    for (const { numero_factura, buf } of pdfsListos) {
       try {
-        const src = await PDFDocument.load(new Uint8Array(pdfBuf));
+        const src = await PDFDocument.load(new Uint8Array(buf));
         const pages = await merged.copyPages(src, src.getPageIndices());
         pages.forEach((p) => merged.addPage(p));
         incluidas++;
-      } catch { errores.push(`${f.numero_factura}: fallo merge`); continue; }
+      } catch { errores.push(`${numero_factura}: fallo merge`); }
     }
 
     if (incluidas === 0) {
