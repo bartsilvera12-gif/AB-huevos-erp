@@ -30,9 +30,11 @@ export async function POST(
       entidad_nombre_snapshot?: string;
     };
 
+    // La columna en `facturas` se llama `monto`, no `total`. `total` era el
+    // supuesto que rompía la query con "column facturas.total does not exist".
     const facQ = await supabase
       .from("facturas")
-      .select("id, origen_venta_id, cliente_id, total, tipo, saldo, numero_factura")
+      .select("id, origen_venta_id, cliente_id, monto, tipo, saldo, numero_factura")
       .eq("empresa_id", auth.empresa_id)
       .eq("id", facturaId)
       .maybeSingle();
@@ -41,7 +43,7 @@ export async function POST(
       id: string;
       origen_venta_id: string | null;
       cliente_id: string | null;
-      total: number | string;
+      monto: number | string;
       tipo: string;
       saldo: number | string;
       numero_factura: string;
@@ -53,9 +55,9 @@ export async function POST(
     if (!fac.cliente_id) {
       return NextResponse.json(errorResponse("La factura no tiene cliente asociado."), { status: 400 });
     }
-    const total = Number(fac.total) || 0;
+    const total = Number(fac.monto) || 0;
     if (!(total > 0)) {
-      return NextResponse.json(errorResponse("El total de la factura debe ser mayor a cero."), { status: 400 });
+      return NextResponse.json(errorResponse("El monto de la factura debe ser mayor a cero."), { status: 400 });
     }
 
     // Buscar CxC existente (por si ya se creó en algún flujo).
