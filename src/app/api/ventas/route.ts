@@ -85,32 +85,16 @@ export async function GET(request: NextRequest) {
       if (ventasQ.error) throw new Error(ventasQ.error.message);
     }
 
-    // Traemos SOLO los items de las ventas que efectivamente cargamos (las
-    // últimas 500). Antes se traían todos los items históricos de la empresa,
-    // lo que crecía sin límite y hacía cada vez más lento el listado. Además
-    // batcheamos el .in() de a 200 para no explotar el largo de URL.
+    const itemsQ = await ctx.supabase
+      .from("ventas_items")
+      .select(
+        "venta_id, producto_id, producto_nombre, sku, cantidad, precio_venta_original, precio_venta, tipo_iva, tipo_precio, subtotal, monto_iva, total_linea"
+      )
+      .eq("empresa_id", empresaId);
+    if (itemsQ.error) throw new Error(itemsQ.error.message);
+
     const ventasRows = (ventasQ.data ?? []) as VentaRow[];
-    const ventaIds = ventasRows.map((v) => v.id);
-    type VentaItemFetched = {
-      venta_id: string; producto_id: string; producto_nombre: string; sku: string;
-      cantidad: number; precio_venta_original: number; precio_venta: number;
-      tipo_iva: string; tipo_precio: string;
-      subtotal: number; monto_iva: number; total_linea: number;
-    };
-    const itemsRows: VentaItemFetched[] = [];
-    const ITEMS_CHUNK = 200;
-    for (let i = 0; i < ventaIds.length; i += ITEMS_CHUNK) {
-      const grupo = ventaIds.slice(i, i + ITEMS_CHUNK);
-      const itemsQ = await ctx.supabase
-        .from("ventas_items")
-        .select(
-          "venta_id, producto_id, producto_nombre, sku, cantidad, precio_venta_original, precio_venta, tipo_iva, tipo_precio, subtotal, monto_iva, total_linea"
-        )
-        .eq("empresa_id", empresaId)
-        .in("venta_id", grupo);
-      if (itemsQ.error) throw new Error(itemsQ.error.message);
-      itemsRows.push(...((itemsQ.data ?? []) as VentaItemFetched[]));
-    }
+    const itemsRows = (itemsQ.data ?? []) as VentaItemRow[];
 
     // Estado SIFEN por factura_id (para saber si podemos mostrar "Factura" en la lista)
     const facturaIds = Array.from(new Set(
