@@ -130,7 +130,13 @@ export async function GET(
     // 10; el merge sí se hace serial al final (pdf-lib no es thread-safe).
     const merged = await PDFDocument.create();
     const errores: string[] = [];
-    const CONCURRENCIA = 10;
+    // Concurrencia alta para minimizar wall-clock (Cloudflare corta a 100s).
+    // Con 150 facturas y 25 paralelos son ~6 batches; cada uno tarda ~1s
+    // (descarga XML + generar PDF), total ~6-10s. Deja margen para el merge
+    // final y el envío del binario.
+    const CONCURRENCIA = 25;
+    const t0 = Date.now();
+    console.log(`[/api/facturas/mes/${ym}/pdf] iniciando con ${facturas.length} facturas, concurrencia ${CONCURRENCIA}`);
 
     type PdfListo = { numero_factura: string; buf: Buffer };
     const pdfsListos: PdfListo[] = [];
@@ -171,6 +177,8 @@ export async function GET(
       const grupo = facturas.slice(i, i + CONCURRENCIA);
       await Promise.all(grupo.map(procesarUna));
     }
+    const tGen = Date.now() - t0;
+    console.log(`[/api/facturas/mes/${ym}/pdf] generación completa en ${tGen}ms, ${pdfsListos.length} PDFs listos, ${errores.length} errores`);
 
     // Ordenar por número de factura (fecha ya venía ordenada, mantenemos orden estable)
     const ordenMap = new Map(facturas.map((f, i) => [f.numero_factura, i] as const));
@@ -185,6 +193,8 @@ export async function GET(
         incluidas++;
       } catch { errores.push(`${numero_factura}: fallo merge`); }
     }
+    const tMerge = Date.now() - t0;
+    console.log(`[/api/facturas/mes/${ym}/pdf] merge completo en ${tMerge}ms total, ${incluidas} páginas`);
 
     if (incluidas === 0) {
       return NextResponse.json(
