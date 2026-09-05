@@ -80,11 +80,16 @@ export async function GET(
     const { auth, supabase } = ctx;
     console.log(`[/api/facturas/mes/${ym}/pdf] auth OK (+${Date.now() - T0}ms)`);
 
-    // Rango del mes.
+    // Rango del mes. Aceptamos `?d=YYYY-MM-DD&h=YYYY-MM-DD` (inclusivo/exclusivo)
+    // para permitir descargar el mes en tandas cuando tiene muchas facturas y
+    // se pasa el timeout de Cloudflare (~100s).
+    const url = new URL(request.url);
+    const dParam = url.searchParams.get("d");
+    const hParam = url.searchParams.get("h");
     const [y, m] = ym.split("-").map((v) => Number(v));
-    const desde = `${y}-${String(m).padStart(2, "0")}-01`;
     const nextMonth = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 };
-    const hasta = `${nextMonth.y}-${String(nextMonth.m).padStart(2, "0")}-01`;
+    const desde = dParam && /^\d{4}-\d{2}-\d{2}$/.test(dParam) ? dParam : `${y}-${String(m).padStart(2, "0")}-01`;
+    const hasta = hParam && /^\d{4}-\d{2}-\d{2}$/.test(hParam) ? hParam : `${nextMonth.y}-${String(nextMonth.m).padStart(2, "0")}-01`;
 
     // 1) Facturas del mes.
     console.log(`[/api/facturas/mes/${ym}/pdf] q1 facturas (+${Date.now() - T0}ms)`);

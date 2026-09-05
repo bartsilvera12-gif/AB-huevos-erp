@@ -203,14 +203,46 @@ export default function FacturasHistorialPage() {
                     <span className="text-xs text-slate-500">· {g.count} factura{g.count === 1 ? "" : "s"}</span>
                   </button>
                   <div className="flex items-center gap-3">
-                    <a
-                      href={`/api/facturas/mes/${g.ym}/pdf`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-800 hover:bg-rose-100"
-                      title={`Descargar todas las facturas aprobadas de ${ymLabel(g.ym)} en un PDF único`}
-                    >
-                      <Download className="h-3 w-3" /> PDF único
-                    </a>
+                    {/*
+                      Mes con muchas facturas (>75): descarga por tandas de 10 días.
+                      Un mes entero de 100+ facturas pasa el timeout de Cloudflare (~100s).
+                      Se ofrecen 3 botones (día 1-10, 11-20, 21-fin) que descargan
+                      cada uno un PDF independiente en <15s.
+                    */}
+                    {g.count > 75 ? (
+                      <div className="flex items-center gap-1">
+                        {(() => {
+                          const [yy, mm] = g.ym.split("-");
+                          const mmNum = Number(mm);
+                          const finMes = new Date(Number(yy), mmNum, 0).getDate();
+                          const rangos: Array<{ d: string; h: string; label: string }> = [
+                            { d: `${yy}-${mm}-01`, h: `${yy}-${mm}-11`, label: "Días 1-10" },
+                            { d: `${yy}-${mm}-11`, h: `${yy}-${mm}-21`, label: "Días 11-20" },
+                            { d: `${yy}-${mm}-21`, h: (mmNum === 12 ? `${Number(yy)+1}-01-01` : `${yy}-${String(mmNum+1).padStart(2,"0")}-01`), label: `Días 21-${finMes}` },
+                          ];
+                          return rangos.map((r) => (
+                            <a
+                              key={r.label}
+                              href={`/api/facturas/mes/${g.ym}/pdf?d=${r.d}&h=${r.h}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-800 hover:bg-rose-100"
+                              title={`PDF de las facturas del mes entre ${r.d} y ${r.h}`}
+                            >
+                              <Download className="h-3 w-3" /> {r.label}
+                            </a>
+                          ));
+                        })()}
+                      </div>
+                    ) : (
+                      <a
+                        href={`/api/facturas/mes/${g.ym}/pdf`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-800 hover:bg-rose-100"
+                        title={`Descargar todas las facturas aprobadas de ${ymLabel(g.ym)} en un PDF único`}
+                      >
+                        <Download className="h-3 w-3" /> PDF único
+                      </a>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); descargarCsv(g.filas, `facturas-${g.ym}.csv`); }}
