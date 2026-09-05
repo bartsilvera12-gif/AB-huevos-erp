@@ -67,14 +67,18 @@ export async function GET(
   request: NextRequest,
   ctxParams: { params: Promise<{ ym: string }> }
 ) {
+  const { ym } = await ctxParams.params;
+  const T0 = Date.now();
+  console.log(`[/api/facturas/mes/${ym}/pdf] HANDLER START`);
   try {
-    const { ym } = await ctxParams.params;
     if (!/^\d{4}-\d{2}$/.test(ym)) {
       return NextResponse.json(errorResponse("Mes inválido (formato esperado yyyy-mm)."), { status: 400 });
     }
+    console.log(`[/api/facturas/mes/${ym}/pdf] auth (+${Date.now() - T0}ms)`);
     const ctx = await getFacturasSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const { auth, supabase } = ctx;
+    console.log(`[/api/facturas/mes/${ym}/pdf] auth OK (+${Date.now() - T0}ms)`);
 
     // Rango del mes.
     const [y, m] = ym.split("-").map((v) => Number(v));
@@ -83,6 +87,7 @@ export async function GET(
     const hasta = `${nextMonth.y}-${String(nextMonth.m).padStart(2, "0")}-01`;
 
     // 1) Facturas del mes.
+    console.log(`[/api/facturas/mes/${ym}/pdf] q1 facturas (+${Date.now() - T0}ms)`);
     const fQ = await supabase
       .from("facturas")
       .select("id, numero_factura, fecha")
@@ -90,7 +95,8 @@ export async function GET(
       .gte("fecha", desde)
       .lt("fecha", hasta)
       .order("fecha", { ascending: true });
-    if (fQ.error) throw new Error(fQ.error.message);
+    console.log(`[/api/facturas/mes/${ym}/pdf] q1 done (+${Date.now() - T0}ms) rows=${fQ.data?.length ?? "null"} err=${fQ.error?.message ?? "none"}`);
+    if (fQ.error) throw new Error("q1 facturas: " + fQ.error.message);
     const facturas = (fQ.data ?? []) as Array<{ id: string; numero_factura: string; fecha: string }>;
     if (facturas.length === 0) {
       return NextResponse.json(errorResponse(`Sin facturas para ${ym}.`), { status: 404 });
@@ -98,12 +104,14 @@ export async function GET(
     const ids = facturas.map((f) => f.id);
 
     // 2) Estado SIFEN + XML paths + consulta lote.
+    console.log(`[/api/facturas/mes/${ym}/pdf] q2 factura_electronica (+${Date.now() - T0}ms) ids=${ids.length}`);
     const feQ = await supabase
       .from("factura_electronica")
       .select("factura_id, estado_sifen, xml_firmado_path, cdc, sifen_ultima_respuesta_consulta_lote")
       .eq("empresa_id", auth.empresa_id)
       .in("factura_id", ids);
-    if (feQ.error) throw new Error(feQ.error.message);
+    console.log(`[/api/facturas/mes/${ym}/pdf] q2 done (+${Date.now() - T0}ms) rows=${feQ.data?.length ?? "null"} err=${feQ.error?.message ?? "none"}`);
+    if (feQ.error) throw new Error("q2 factura_electronica: " + feQ.error.message);
     const feByFactura = new Map<string, {
       estado_sifen?: string | null;
       xml_firmado_path?: string | null;
@@ -216,6 +224,14 @@ export async function GET(
       },
     });
   } catch (err) {
-    return NextResponse.json(errorResponse(err instanceof Error ? err.message : "Error"), { status: 500 });
+    const raw = err instanceof Error ? err.message : "Error";
+    console.error(`[/api/facturas/mes/${ym}/pdf] CATCH (+${Date.now() - T0}ms):`, raw.slice(0, 300));
+    // Si el mensaje es HTML crudo (típicamente el 502 de Cloudflare envuelto
+    // en la excepción de supabase-js), no lo devolvemos al cliente.
+    const looksLikeHtml = /<!doctype|<html|<body|<head/i.test(raw);
+    const clean = looksLikeHtml || raw.length > 300
+      ? "No se pudo generar el PDF. Reintentá en unos segundos."
+      : raw;
+    return NextResponse.json(errorResponse(clean), { status: 500 });
   }
 }
