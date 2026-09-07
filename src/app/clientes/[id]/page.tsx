@@ -952,55 +952,75 @@ export default function ClienteDetailPage() {
       </button>
 
       {/* ── Panel resumen ─────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] px-6 py-5">
-          <div className="flex items-start justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-md overflow-hidden">
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#0EA5E9] via-[#0284C7] to-[#075985] px-6 py-6">
+          {/* Decoración de fondo */}
+          <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-white/10 blur-3xl" aria-hidden />
+          <div className="pointer-events-none absolute -left-12 bottom-0 h-44 w-44 rounded-full bg-cyan-300/20 blur-3xl" aria-hidden />
+          <div className="pointer-events-none absolute inset-0 opacity-[0.06] bg-[radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:22px_22px]" aria-hidden />
+
+          <div className="relative flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Avatar */}
-              <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold text-white shrink-0 ${
-                cliente.tipo_cliente === "empresa" ? "bg-blue-500/80" : "bg-violet-500/80"
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold text-white shrink-0 ring-2 ring-white/40 shadow-lg ${
+                cliente.tipo_cliente === "empresa"
+                  ? "bg-gradient-to-br from-blue-400 to-blue-600"
+                  : "bg-gradient-to-br from-violet-400 to-violet-600"
               }`}>
                 {nombre.slice(0, 2).toUpperCase()}
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white leading-tight">{nombre}</h1>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  <span className="text-gray-300 font-mono text-xs">{cliente.codigo_cliente}</span>
+                <h1 className="text-2xl font-bold text-white leading-tight tracking-tight drop-shadow-sm">{nombre}</h1>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <span className="inline-flex items-center rounded-md bg-white/15 px-2 py-0.5 font-mono text-xs text-white/90 ring-1 ring-white/20">
+                    {cliente.codigo_cliente}
+                  </span>
                   {cliente.ruc && (
-                    <span className="text-gray-300 text-xs">RUC: {cliente.ruc}</span>
+                    <span className="inline-flex items-center rounded-md bg-white/10 px-2 py-0.5 text-xs text-white/80 ring-1 ring-white/15">
+                      RUC: {cliente.ruc}
+                    </span>
                   )}
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full ring-1 ${
                     cliente.estado === "activo"
-                      ? "bg-green-500/20 text-green-300"
-                      : "bg-gray-500/30 text-gray-300"
+                      ? "bg-emerald-400/20 text-emerald-50 ring-emerald-300/40"
+                      : "bg-gray-500/30 text-gray-100 ring-white/20"
                   }`}>
-                    ● {cliente.estado === "activo" ? "Activo" : "Inactivo"}
+                    <span className="relative flex h-2 w-2">
+                      {cliente.estado === "activo" && (
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
+                      )}
+                      <span className={`relative inline-flex h-2 w-2 rounded-full ${cliente.estado === "activo" ? "bg-emerald-300" : "bg-gray-300"}`} />
+                    </span>
+                    {cliente.estado === "activo" ? "Activo" : "Inactivo"}
                   </span>
                   {cliente.perfil_tributario_activo && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/15 text-white border border-white/25">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/15 text-white ring-1 ring-white/25">
                       Tributario
                     </span>
                   )}
-                  <span className="text-xs text-gray-400">
+                  <span className="inline-flex items-center gap-1 text-xs text-white/75">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5" aria-hidden>
+                      <path fillRule="evenodd" d="M5.75 2a.75.75 0 0 1 .75.75V4h7V2.75a.75.75 0 0 1 1.5 0V4h.25A2.75 2.75 0 0 1 18 6.75v8.5A2.75 2.75 0 0 1 15.25 18H4.75A2.75 2.75 0 0 1 2 15.25v-8.5A2.75 2.75 0 0 1 4.75 4H5V2.75A.75.75 0 0 1 5.75 2Zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75Z" clipRule="evenodd" />
+                    </svg>
                     Cliente desde {formatFecha(cliente.created_at)}
                   </span>
                 </div>
               </div>
             </div>
             {/* Acciones del header */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="relative flex items-center gap-2 shrink-0">
               {cliente.estado === "activo" ? (
                 esAdmin ? (
                   <button
                     onClick={abrirModalBajaOperativa}
-                    className="text-xs font-medium border border-amber-400/60 text-amber-200 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors"
+                    className="text-xs font-medium border border-amber-300/60 text-amber-100 hover:bg-amber-400/25 px-3 py-1.5 rounded-lg backdrop-blur-sm transition-colors"
                   >
                     Dar de baja cliente
                   </button>
                 ) : (
                   <button
                     onClick={handleToggleEstado}
-                    className="text-xs font-medium border border-white/20 text-white/80 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                    className="text-xs font-medium border border-white/25 text-white/90 hover:bg-white/15 px-3 py-1.5 rounded-lg backdrop-blur-sm transition-colors"
                   >
                     Desactivar
                   </button>
@@ -1008,7 +1028,7 @@ export default function ClienteDetailPage() {
               ) : (
                 <button
                   onClick={handleToggleEstado}
-                  className="text-xs font-medium border border-white/20 text-white/80 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                  className="text-xs font-medium border border-white/25 text-white/90 hover:bg-white/15 px-3 py-1.5 rounded-lg backdrop-blur-sm transition-colors"
                 >
                   Reactivar
                 </button>
@@ -1017,7 +1037,7 @@ export default function ClienteDetailPage() {
                 <button
                   type="button"
                   onClick={() => void abrirModalEliminar()}
-                  className="text-red-200 hover:text-white hover:bg-red-900/40 border border-red-400/40 flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors text-xs font-medium"
+                  className="text-red-100 hover:text-white hover:bg-red-900/40 border border-red-300/40 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg backdrop-blur-sm transition-colors text-xs font-medium"
                   title="Eliminar cliente (baja lógica)"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0" aria-hidden>
@@ -1028,7 +1048,7 @@ export default function ClienteDetailPage() {
               )}
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-white/15 flex flex-wrap gap-2">
+          <div className="relative mt-5 pt-4 border-t border-white/15 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => {
@@ -1043,8 +1063,11 @@ export default function ClienteDetailPage() {
                 });
                 setModalSuscripcion(true);
               }}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold bg-white text-[#0369A1] hover:bg-white/90 shadow-sm px-3.5 py-2 rounded-lg transition-colors"
             >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden>
+                <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+              </svg>
               Nueva suscripción
             </button>
             <button
@@ -1054,22 +1077,28 @@ export default function ClienteDetailPage() {
                 setErrorFacturaContado(null);
                 setModalFacturaContado(true);
               }}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3.5 py-2 rounded-lg backdrop-blur-sm transition-colors"
             >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden>
+                <path fillRule="evenodd" d="M4.5 2A1.5 1.5 0 0 0 3 3.5v13.036a.75.75 0 0 0 1.14.64l1.777-1.066 1.777 1.066a.75.75 0 0 0 .772 0l1.777-1.066 1.777 1.066a.75.75 0 0 0 .772 0l1.777-1.066 1.777 1.066a.75.75 0 0 0 1.14-.64V3.5A1.5 1.5 0 0 0 15.5 2h-11ZM6.25 5.5a.75.75 0 0 0 0 1.5h7.5a.75.75 0 0 0 0-1.5h-7.5Zm0 3a.75.75 0 0 0 0 1.5h7.5a.75.75 0 0 0 0-1.5h-7.5Zm0 3a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5Z" clipRule="evenodd" />
+              </svg>
               Factura al contado
             </button>
             <button
               type="button"
               onClick={abrirRegistrarPago}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3.5 py-2 rounded-lg backdrop-blur-sm transition-colors"
             >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden>
+                <path d="M1 4.25c0-.966.784-1.75 1.75-1.75h14.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 17.25 14.5H2.75A1.75 1.75 0 0 1 1 12.75v-8.5ZM10 11a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM4.5 6.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM16.5 13.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />
+              </svg>
               Registrar pago
             </button>
           </div>
         </div>
 
         {/* Estadísticas rápidas */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 border-t border-gray-100">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 border-t border-gray-100 bg-gradient-to-b from-slate-50/60 to-white">
           {(
             [
               { label: "Origen", value: cliente.origen },
@@ -1109,9 +1138,9 @@ export default function ClienteDetailPage() {
           )
             .filter((item) => !SIMPLE_CLIENTE || !["Origen", "Tipo servicio", "Plan activo", "Vendedor"].includes(item.label))
             .map((item) => (
-            <div key={item.label} className="px-5 py-3">
-              <p className="text-xs text-gray-400">{item.label}</p>
-              <div className="text-sm font-semibold text-gray-700 mt-0.5">{item.value}</div>
+            <div key={item.label} className="px-5 py-3.5 transition-colors hover:bg-sky-50/60">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{item.label}</p>
+              <div className="text-sm font-semibold text-gray-800 mt-1">{item.value}</div>
             </div>
           ))}
         </div>
