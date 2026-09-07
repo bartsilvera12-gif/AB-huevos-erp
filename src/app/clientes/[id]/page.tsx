@@ -953,10 +953,10 @@ export default function ClienteDetailPage() {
 
       {/* ── Panel resumen ─────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-200/80 shadow-md overflow-hidden">
-        <div className="relative overflow-hidden bg-gradient-to-br from-[#0EA5E9] via-[#0284C7] to-[#075985] px-6 py-6">
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#14B8A6] via-[#0D9488] to-[#0F766E] px-6 py-6">
           {/* Decoración de fondo */}
           <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-white/10 blur-3xl" aria-hidden />
-          <div className="pointer-events-none absolute -left-12 bottom-0 h-44 w-44 rounded-full bg-cyan-300/20 blur-3xl" aria-hidden />
+          <div className="pointer-events-none absolute -left-12 bottom-0 h-44 w-44 rounded-full bg-teal-300/25 blur-3xl" aria-hidden />
           <div className="pointer-events-none absolute inset-0 opacity-[0.06] bg-[radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:22px_22px]" aria-hidden />
 
           <div className="relative flex items-start justify-between gap-4">
@@ -1063,7 +1063,7 @@ export default function ClienteDetailPage() {
                 });
                 setModalSuscripcion(true);
               }}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold bg-white text-[#0369A1] hover:bg-white/90 shadow-sm px-3.5 py-2 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold bg-white text-[#0F766E] hover:bg-white/90 shadow-sm px-3.5 py-2 rounded-lg transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden>
                 <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
@@ -1138,7 +1138,7 @@ export default function ClienteDetailPage() {
           )
             .filter((item) => !SIMPLE_CLIENTE || !["Origen", "Tipo servicio", "Plan activo", "Vendedor"].includes(item.label))
             .map((item) => (
-            <div key={item.label} className="px-5 py-3.5 transition-colors hover:bg-sky-50/60">
+            <div key={item.label} className="px-5 py-3.5 transition-colors hover:bg-teal-50/60">
               <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{item.label}</p>
               <div className="text-sm font-semibold text-gray-800 mt-1">{item.value}</div>
             </div>
