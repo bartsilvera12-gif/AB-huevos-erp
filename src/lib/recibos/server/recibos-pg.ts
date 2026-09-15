@@ -1,4 +1,5 @@
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
+import { normalizarCodigoTres, normalizarNumeroDocumentoSifen } from "@/lib/sifen/sifen-cdc";
 
 export type OrigenRecibo = "venta_contado" | "cobro_cxc" | "manual";
 
@@ -149,23 +150,58 @@ export async function crearOReusarRecibo(
 
     // Concepto según saldo de la cuenta (cancelación vs parcial).
     let numeroVenta = "";
+    let ventaIdCxc = "";
     let saldo = 0;
     let moneda = "PYG";
     if (cob.cuenta_por_cobrar_id) {
       const ctaQ = await sb
         .from("cuentas_por_cobrar")
-        .select("numero_venta, saldo, moneda")
+        .select("numero_venta, saldo, moneda, venta_id")
         .eq("empresa_id", empresaId)
         .eq("id", String(cob.cuenta_por_cobrar_id))
         .maybeSingle();
       const cta = (ctaQ.data ?? {}) as unknown as Record<string, unknown>;
       numeroVenta = (cta.numero_venta as string) || "";
+      ventaIdCxc = (cta.venta_id as string) || "";
       saldo = Number(cta.saldo) || 0;
       moneda = (cta.moneda as string) === "USD" ? "USD" : "PYG";
     }
+    // Si la venta tiene factura asociada, el concepto referencia el número REAL de
+    // factura (formato SIFEN 001-001-0000280), que es lo que espera el cliente. Si no
+    // hay factura (p. ej. venta con ticket) o falla la búsqueda, se mantiene el número
+    // de venta (VTA-xxxxxx) como fallback. Toda falla de lectura degrada al fallback.
+    const ventaIdRef = (cob.venta_id ? String(cob.venta_id) : "") || ventaIdCxc;
+    let numeroFacturaRef = "";
+    if (ventaIdRef) {
+      try {
+        const facQ = await sb
+          .from("facturas")
+          .select("numero_factura")
+          .eq("empresa_id", empresaId)
+          .eq("origen_venta_id", ventaIdRef)
+          .order("numero_factura", { ascending: false })
+          .limit(1);
+        const numFac = (facQ.data?.[0] as { numero_factura?: string } | undefined)?.numero_factura?.trim();
+        if (numFac) {
+          const cfgQ = await sb
+            .from("empresa_sifen_config")
+            .select("establecimiento, punto_expedicion")
+            .eq("empresa_id", empresaId)
+            .maybeSingle();
+          const cfg = cfgQ.data as { establecimiento?: string; punto_expedicion?: string } | null;
+          numeroFacturaRef = cfg?.establecimiento && cfg?.punto_expedicion
+            ? `${normalizarCodigoTres(String(cfg.establecimiento))}-${normalizarCodigoTres(String(cfg.punto_expedicion))}-${normalizarNumeroDocumentoSifen(numFac)}`
+            : numFac; // Sin config SIFEN completa: nº ERP de la factura (mejor que el nº de venta).
+        }
+      } catch {
+        /* búsqueda de factura falló: se usa el fallback (numeroVenta). */
+      }
+    }
+
+    const referencia = numeroFacturaRef ? `Factura N° ${numeroFacturaRef}` : `cuenta ${numeroVenta}`.trim();
     const concepto = saldo <= 0.001
-      ? `Cancelación de cuenta ${numeroVenta}`.trim()
-      : `Pago parcial de cuenta ${numeroVenta}`.trim();
+      ? `Cancelación de ${referencia}`.trim()
+      : `Pago parcial de ${referencia}`.trim();
 
     const { nombre, documento } = await nombreYDoc(sb, empresaId, cob.cliente_id ? String(cob.cliente_id) : null);
 
