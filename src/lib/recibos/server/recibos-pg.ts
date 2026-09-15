@@ -23,6 +23,44 @@ const RECIBO_COLS =
   "id, numero_recibo, cliente_id, cliente_nombre, cliente_documento, origen, venta_id, " +
   "cuenta_por_cobrar_id, cobro_cliente_id, fecha, moneda, monto, metodo_pago, referencia, concepto, observaciones, usuario_nombre, anulado";
 
+/**
+ * Devuelve el número de factura de la venta indicada en formato legal SIFEN
+ * (ej. "001-001-0000280"), o "" si la venta no tiene factura asociada o si la lectura
+ * falla. Sin config SIFEN completa cae al número ERP de la factura (ej. "FAC-000280").
+ *
+ * Se usa tanto al CREAR el recibo como al RENDERIZAR su PDF, para que los recibos ya
+ * generados también reflejen el número real de factura sin tocar la base ni el cobro.
+ */
+export async function resolverNumeroFacturaRef(
+  sb: AppSupabaseClient,
+  empresaId: string,
+  ventaId: string | null | undefined
+): Promise<string> {
+  if (!ventaId) return "";
+  try {
+    const facQ = await sb
+      .from("facturas")
+      .select("numero_factura")
+      .eq("empresa_id", empresaId)
+      .eq("origen_venta_id", String(ventaId))
+      .order("numero_factura", { ascending: false })
+      .limit(1);
+    const numFac = (facQ.data?.[0] as { numero_factura?: string } | undefined)?.numero_factura?.trim();
+    if (!numFac) return "";
+    const cfgQ = await sb
+      .from("empresa_sifen_config")
+      .select("establecimiento, punto_expedicion")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const cfg = cfgQ.data as { establecimiento?: string; punto_expedicion?: string } | null;
+    return cfg?.establecimiento && cfg?.punto_expedicion
+      ? `${normalizarCodigoTres(String(cfg.establecimiento))}-${normalizarCodigoTres(String(cfg.punto_expedicion))}-${normalizarNumeroDocumentoSifen(numFac)}`
+      : numFac; // Sin config SIFEN completa: nº ERP de la factura (mejor que el nº de venta).
+  } catch {
+    return ""; // Cualquier falla de lectura degrada al fallback (nº de venta).
+  }
+}
+
 async function siguienteNumero(sb: AppSupabaseClient, empresaId: string): Promise<string> {
   const { data, error } = await sb
     .from("recibos_dinero")
@@ -167,36 +205,10 @@ export async function crearOReusarRecibo(
       moneda = (cta.moneda as string) === "USD" ? "USD" : "PYG";
     }
     // Si la venta tiene factura asociada, el concepto referencia el número REAL de
-    // factura (formato SIFEN 001-001-0000280), que es lo que espera el cliente. Si no
-    // hay factura (p. ej. venta con ticket) o falla la búsqueda, se mantiene el número
-    // de venta (VTA-xxxxxx) como fallback. Toda falla de lectura degrada al fallback.
+    // factura (formato SIFEN 001-001-0000280). Si no hay factura (p. ej. venta con
+    // ticket) o falla la búsqueda, se mantiene el número de venta (VTA-xxxxxx).
     const ventaIdRef = (cob.venta_id ? String(cob.venta_id) : "") || ventaIdCxc;
-    let numeroFacturaRef = "";
-    if (ventaIdRef) {
-      try {
-        const facQ = await sb
-          .from("facturas")
-          .select("numero_factura")
-          .eq("empresa_id", empresaId)
-          .eq("origen_venta_id", ventaIdRef)
-          .order("numero_factura", { ascending: false })
-          .limit(1);
-        const numFac = (facQ.data?.[0] as { numero_factura?: string } | undefined)?.numero_factura?.trim();
-        if (numFac) {
-          const cfgQ = await sb
-            .from("empresa_sifen_config")
-            .select("establecimiento, punto_expedicion")
-            .eq("empresa_id", empresaId)
-            .maybeSingle();
-          const cfg = cfgQ.data as { establecimiento?: string; punto_expedicion?: string } | null;
-          numeroFacturaRef = cfg?.establecimiento && cfg?.punto_expedicion
-            ? `${normalizarCodigoTres(String(cfg.establecimiento))}-${normalizarCodigoTres(String(cfg.punto_expedicion))}-${normalizarNumeroDocumentoSifen(numFac)}`
-            : numFac; // Sin config SIFEN completa: nº ERP de la factura (mejor que el nº de venta).
-        }
-      } catch {
-        /* búsqueda de factura falló: se usa el fallback (numeroVenta). */
-      }
-    }
+    const numeroFacturaRef = await resolverNumeroFacturaRef(sb, empresaId, ventaIdRef);
 
     const referencia = numeroFacturaRef ? `Factura N° ${numeroFacturaRef}` : `cuenta ${numeroVenta}`.trim();
     const concepto = saldo <= 0.001

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { buildReciboPdfBuffer, type ReciboPdfRow } from "@/lib/recibos/server/recibo-pdf";
+import { resolverNumeroFacturaRef } from "@/lib/recibos/server/recibos-pg";
 
 /**
  * GET /api/recibos-dinero/[id]/pdf
@@ -26,7 +27,34 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
     .eq("id", id)
     .maybeSingle();
   if (rq.error || !rq.data) return new NextResponse("Recibo no encontrado", { status: 404 });
-  const r = rq.data as ReciboPdfRow & { numero_recibo?: unknown };
+  const r = rq.data as ReciboPdfRow & {
+    numero_recibo?: unknown;
+    origen?: unknown;
+    venta_id?: unknown;
+    cuenta_por_cobrar_id?: unknown;
+  };
+
+  // Recibos de cobro de cuenta corriente: mostrar el número REAL de factura asociada,
+  // incluso si el recibo se generó antes de este cambio (cuando el concepto guardaba el
+  // nº de venta). Solo ajusta el texto mostrado en el PDF; no modifica la base ni el cobro.
+  if (String(r.origen ?? "") === "cobro_cxc") {
+    let ventaId = r.venta_id ? String(r.venta_id) : "";
+    if (!ventaId && r.cuenta_por_cobrar_id) {
+      const ctaQ = await ctx.supabase
+        .from("cuentas_por_cobrar")
+        .select("venta_id")
+        .eq("empresa_id", ctx.auth.empresa_id)
+        .eq("id", String(r.cuenta_por_cobrar_id))
+        .maybeSingle();
+      ventaId = (ctaQ.data as { venta_id?: string } | null)?.venta_id ?? "";
+    }
+    const legal = await resolverNumeroFacturaRef(ctx.supabase, ctx.auth.empresa_id, ventaId);
+    if (legal) {
+      // Solo reescribe el patrón auto-generado "... cuenta VTA-xxx" (no toca conceptos manuales).
+      const m = String(r.concepto ?? "").match(/^(Cancelación de|Pago parcial de)\s+cuenta\b/);
+      if (m) r.concepto = `${m[1]} Factura N° ${legal}`;
+    }
+  }
 
   const pdf = await buildReciboPdfBuffer(r);
 
