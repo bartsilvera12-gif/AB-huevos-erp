@@ -293,7 +293,7 @@ function ReciboPagoButton({ facturaId, tieneSaldo }: { facturaId: string; tieneS
       const r = await fetchWithSupabaseSession(`/api/facturas/${facturaId}/recibo`, { cache: "no-store" });
       const j = await r.json().catch(() => ({}));
       if (r.ok && j?.data?.recibo_id) {
-        window.open(`/api/recibos-dinero/${j.data.recibo_id}/pdf?auto=1`, "_blank", "noopener");
+        window.open(`/api/recibos-dinero/${j.data.recibo_id}/pdf`, "_blank", "noopener");
         return;
       }
       // 404 = no hay cobro registrado. Abrimos modal para registrar en el momento.
@@ -327,7 +327,7 @@ function ReciboPagoButton({ facturaId, tieneSaldo }: { facturaId: string; tieneS
           onClose={() => setModalOpen(false)}
           onDone={(reciboId) => {
             setModalOpen(false);
-            window.open(`/api/recibos-dinero/${reciboId}/pdf?auto=1`, "_blank", "noopener");
+            window.open(`/api/recibos-dinero/${reciboId}/pdf`, "_blank", "noopener");
             // Refrescar la pantalla para reflejar saldo en 0.
             window.location.reload();
           }}

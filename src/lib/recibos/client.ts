@@ -5,8 +5,8 @@ type GenerarReciboInput =
   | { origen: "cobro_cxc"; cobro_cliente_id: string };
 
 /**
- * Genera (o reutiliza si ya existe) un recibo de dinero y abre su documento imprimible.
- * Idempotente: si ya hay recibo para esa venta/cobro, se reimprime el mismo.
+ * Genera (o reutiliza si ya existe) un recibo de dinero y abre su PDF.
+ * Idempotente: si ya hay recibo para esa venta/cobro, se reabre el mismo.
  * Devuelve true si se abrió OK, o un mensaje de error.
  */
 export async function generarYAbrirRecibo(input: GenerarReciboInput): Promise<{ ok: boolean; error?: string }> {
@@ -22,7 +22,7 @@ export async function generarYAbrirRecibo(input: GenerarReciboInput): Promise<{ 
     }
     const id = String(body.data.recibo.id);
     try {
-      window.open(`/api/recibos-dinero/${id}/pdf?auto=1`, "_blank", "noopener");
+      window.open(`/api/recibos-dinero/${id}/pdf`, "_blank", "noopener");
     } catch { /* el popup pudo bloquearse */ }
     return { ok: true };
   } catch {
