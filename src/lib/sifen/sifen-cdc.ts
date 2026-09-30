@@ -90,6 +90,61 @@ export function formatoCuerpoRucTipoTruc(cuerpo: string): string {
 }
 
 /**
+ * Dígito verificador de un RUC paraguayo (módulo 11, base 11 — mismo algoritmo que el DV del CDC
+ * y que `calcularDigitoVerificador` del SET). `cuerpo` = número del RUC SIN el DV. Se calcula sobre
+ * los dígitos significativos (sin ceros a la izquierda), como lo tiene registrado Marangatu.
+ */
+export function calcularDvRucSet(cuerpo: string): string {
+  const sig = String(cuerpo).replace(/\D/g, "").replace(/^0+/, "") || "0";
+  let k = 2;
+  let total = 0;
+  for (let i = sig.length - 1; i >= 0; i--) {
+    if (k > 11) k = 2;
+    total += parseInt(sig[i]!, 10) * k;
+    k += 1;
+  }
+  const resto = total % 11;
+  const dv = resto > 1 ? 11 - resto : 0;
+  return String(dv);
+}
+
+export interface RucValidacion {
+  ok: boolean;
+  cuerpo: string; // dígitos significativos del RUC (sin DV, sin ceros a la izquierda)
+  dvIngresado: string; // último dígito ingresado
+  dvEsperado: string; // DV calculado por módulo 11
+  motivo?: string; // mensaje si !ok
+}
+
+/**
+ * Valida un RUC paraguayo completo (número + DV). El DV es el último dígito ingresado y se compara
+ * con el calculado por módulo 11. NO valida existencia en Marangatu, solo la consistencia del DV
+ * (sirve para detectar un RUC incompleto o mal tipeado antes de mandarlo al SET).
+ */
+export function validarRucConDv(rucRaw: string): RucValidacion {
+  const d = String(rucRaw ?? "").replace(/\D/g, "");
+  if (d.length < 2) {
+    return { ok: false, cuerpo: "", dvIngresado: "", dvEsperado: "", motivo: "El RUC es demasiado corto." };
+  }
+  const dvIngresado = d.slice(-1);
+  const cuerpo = d.slice(0, -1).replace(/^0+/, "") || "0";
+  if (cuerpo === "0") {
+    return { ok: false, cuerpo, dvIngresado, dvEsperado: "", motivo: "El RUC no tiene dígitos significativos." };
+  }
+  const dvEsperado = calcularDvRucSet(cuerpo);
+  const ok = dvEsperado === dvIngresado;
+  return {
+    ok,
+    cuerpo,
+    dvIngresado,
+    dvEsperado,
+    motivo: ok
+      ? undefined
+      : `el dígito verificador no coincide (ingresado "${dvIngresado}", esperado "${dvEsperado}"). Verificá el número: puede faltar o sobrar un dígito.`,
+  };
+}
+
+/**
  * DV del CDC (módulo 11, igual `jsonDteAlgoritmos.calcularDigitoVerificador` TIPS, baseMax 11).
  */
 export function digitoVerificadorModulo11CdcSet(base43: string): string {

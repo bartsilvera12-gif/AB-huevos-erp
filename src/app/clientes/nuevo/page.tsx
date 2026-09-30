@@ -10,6 +10,7 @@ import {
   apiGetObligacionesTributariasCatalogo,
   apiPutClientePerfilTributario,
 } from "@/lib/api/client";
+import { validarRucConDv } from "@/lib/sifen/sifen-cdc";
 import {
   ClientePerfilTributarioForm,
   buildPerfilTributarioPutBody,
@@ -220,6 +221,13 @@ function NuevoClienteForm() {
 
     if (!form.nombre_contacto.trim())                              return setError("El nombre de contacto es obligatorio.");
     if (form.tipo_cliente === "empresa" && !form.empresa.trim())   return setError("La razón social es obligatoria para empresas.");
+
+    // RUC + dígito verificador (módulo 11). Evita mandar al SET un RUC incompleto/mal tipeado
+    // (causa del rechazo "RUC del receptor inexistente"). No aplica a receptores extranjeros.
+    if (form.tipo_cliente === "empresa" && form.ruc.trim() && form.sifen_receptor_naturaleza !== "extranjero") {
+      const v = validarRucConDv(form.ruc);
+      if (!v.ok) return setError(`RUC inválido: ${v.motivo}`);
+    }
 
     if (form.condicion_pago === "MENSUAL" && form.estado === "activo") {
       const dur = parseInt(formSusc.duracion_meses, 10) || 0;
@@ -497,14 +505,24 @@ function NuevoClienteForm() {
                   {form.tipo_cliente === "empresa" ? "RUC" : "CI / Documento"}
                 </label>
                 {form.tipo_cliente === "empresa" ? (
-                  <input
-                    type="text"
-                    name="ruc"
-                    value={form.ruc}
-                    onChange={handleChange}
-                    placeholder="00000000-0"
-                    className={inputClass}
-                  />
+                  <>
+                    <input
+                      type="text"
+                      name="ruc"
+                      value={form.ruc}
+                      onChange={handleChange}
+                      placeholder="00000000-0"
+                      className={inputClass}
+                    />
+                    {form.ruc.trim() &&
+                      form.sifen_receptor_naturaleza !== "extranjero" &&
+                      !validarRucConDv(form.ruc).ok && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Verificá el RUC: el dígito verificador no coincide (esperado:{" "}
+                          {validarRucConDv(form.ruc).dvEsperado || "—"}).
+                        </p>
+                      )}
+                  </>
                 ) : (
                   <input
                     type="text"

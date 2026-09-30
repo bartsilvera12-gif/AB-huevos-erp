@@ -30,6 +30,7 @@ import { getMarketingTasks, createMarketingTask, updateTaskStatus } from "@/lib/
 import { getUsuariosActivosEmpresa, type UsuarioEmpresa } from "@/lib/usuarios/empresa";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { SifenEstadoBadge } from "@/components/sifen/SifenEstadoBadge";
+import { validarRucConDv } from "@/lib/sifen/sifen-cdc";
 import { useFacturaSifenEstados } from "@/hooks/useFacturaSifenEstados";
 import MontoInput from "@/components/ui/MontoInput";
 import { getPlanes } from "@/lib/planes/storage";
@@ -527,6 +528,13 @@ export default function ClienteDetailPage() {
     setFormError(null);
     if (!form.nombre_contacto.trim())                             return setFormError("El contacto es obligatorio.");
     if (form.tipo_cliente === "empresa" && !form.empresa.trim())  return setFormError("La razón social es obligatoria para empresas.");
+
+    // RUC + dígito verificador (módulo 11). Evita mandar al SET un RUC incompleto/mal tipeado
+    // (causa del rechazo "RUC del receptor inexistente"). No aplica a receptores extranjeros.
+    if (form.tipo_cliente === "empresa" && form.ruc.trim() && form.sifen_receptor_naturaleza !== "extranjero") {
+      const v = validarRucConDv(form.ruc);
+      if (!v.ok) return setFormError(`RUC inválido: ${v.motivo}`);
+    }
 
     // Solo validar creación de suscripción cuando: MENSUAL + activo + NO tiene suscripciones
     if (form.condicion_pago === "MENSUAL" && form.estado === "activo" && suscripciones.length === 0) {
@@ -1544,7 +1552,17 @@ export default function ClienteDetailPage() {
                   <div>
                     <label className={labelClass}>{form.tipo_cliente === "empresa" ? "RUC" : "CI / Documento"}</label>
                     {form.tipo_cliente === "empresa" ? (
-                      <input type="text" name="ruc" value={form.ruc} onChange={handleChange} className={inputClass} />
+                      <>
+                        <input type="text" name="ruc" value={form.ruc} onChange={handleChange} className={inputClass} />
+                        {form.ruc.trim() &&
+                          form.sifen_receptor_naturaleza !== "extranjero" &&
+                          !validarRucConDv(form.ruc).ok && (
+                            <p className="text-xs text-amber-600 mt-1">
+                              Verificá el RUC: el dígito verificador no coincide (esperado:{" "}
+                              {validarRucConDv(form.ruc).dvEsperado || "—"}).
+                            </p>
+                          )}
+                      </>
                     ) : (
                       <input type="text" name="documento" value={form.documento} onChange={handleChange} className={inputClass} />
                     )}

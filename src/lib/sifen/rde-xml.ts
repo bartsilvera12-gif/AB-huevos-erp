@@ -22,6 +22,7 @@ import {
   formatoCuerpoRucTipoTruc,
   padDigits,
   splitRucParaXml,
+  validarRucConDv,
 } from "./sifen-cdc";
 import {
   descripcionTipoDocRecepXml,
@@ -465,6 +466,10 @@ export function buildOfficialRdeFacturaElectronicaXml(
     if (receptor.sifen_i_nat_rec === 1) {
       const rucL = receptor.ruc?.trim();
       if (!rucL) throw new Error("SIFEN receptor manual: falta RUC en el payload.");
+      const vRuc = validarRucConDv(rucL);
+      if (!vRuc.ok) {
+        throw new Error(`RUC del receptor inválido (${rucL}): ${vRuc.motivo} Corregí el RUC del cliente antes de emitir.`);
+      }
       const { cuerpo: dRucRec, dDV: dDVRec } = splitRucParaXml(rucL);
       const iTiContRec = iTipContCodigo(receptor.nombre);
       recParts.push(textEl("cPaisRec", "PRY"));
@@ -527,7 +532,12 @@ export function buildOfficialRdeFacturaElectronicaXml(
     }
     if (receptor.email?.trim()) recParts.push(textEl("dEmailRec", receptor.email.trim()));
   } else if (receptor.ruc?.trim()) {
-    const { cuerpo: dRucRec, dDV: dDVRec } = splitRucParaXml(receptor.ruc.trim());
+    const rucRec = receptor.ruc.trim();
+    const vRuc = validarRucConDv(rucRec);
+    if (!vRuc.ok) {
+      throw new Error(`RUC del receptor inválido (${rucRec}): ${vRuc.motivo} Corregí el RUC del cliente antes de emitir.`);
+    }
+    const { cuerpo: dRucRec, dDV: dDVRec } = splitRucParaXml(rucRec);
     const iTiContRec = iTipContCodigo(receptor.nombre);
     recParts.push(textEl("iNatRec", "1"));
     recParts.push(textEl("iTiOpe", "1"));
