@@ -3,6 +3,7 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import type { Venta, LineaVenta, TipoIvaVenta, TipoPrecioVenta } from "@/lib/ventas/types";
+import { inPorTandas } from "@/lib/supabase/in-por-tandas";
 
 interface VentaRow {
   id: string;
@@ -102,11 +103,13 @@ export async function GET(request: NextRequest) {
     ));
     const estadoPorFactura = new Map<string, string>();
     if (facturaIds.length > 0) {
-      const feQ = await ctx.supabase
-        .from("factura_electronica")
-        .select("factura_id, estado_sifen")
-        .eq("empresa_id", empresaId)
-        .in("factura_id", facturaIds);
+      const feQ = await inPorTandas(facturaIds, (tanda) =>
+        ctx.supabase
+          .from("factura_electronica")
+          .select("factura_id, estado_sifen")
+          .eq("empresa_id", empresaId)
+          .in("factura_id", tanda)
+      );
       if (!feQ.error) {
         for (const r of (feQ.data ?? []) as Array<{ factura_id: string; estado_sifen: string }>) {
           estadoPorFactura.set(r.factura_id, r.estado_sifen);
@@ -120,11 +123,13 @@ export async function GET(request: NextRequest) {
     ));
     const nombrePorCliente = new Map<string, string>();
     if (clienteIds.length > 0) {
-      const cQ = await ctx.supabase
-        .from("clientes")
-        .select("id, nombre, empresa")
-        .eq("empresa_id", empresaId)
-        .in("id", clienteIds);
+      const cQ = await inPorTandas(clienteIds, (tanda) =>
+        ctx.supabase
+          .from("clientes")
+          .select("id, nombre, empresa")
+          .eq("empresa_id", empresaId)
+          .in("id", tanda)
+      );
       if (!cQ.error) {
         for (const c of (cQ.data ?? []) as Array<{ id: string; nombre: string | null; empresa: string | null }>) {
           const nombre = (c.empresa && c.empresa.trim()) || (c.nombre && c.nombre.trim()) || "";

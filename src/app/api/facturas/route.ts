@@ -7,6 +7,7 @@ import { fechaMasDiasCalendario, fechaVencimientoSuscripcion, toCalendarDateStr 
 import { montosFacturaItemParaInsert, tasaIvaDesdeIvaTipo } from "@/lib/facturacion/factura-item-montos";
 import { descripcionLineaFacturaPorDefecto, parseFacturaPostTipo } from "@/lib/facturacion/factura-post-tipo";
 import { obtenerSiguienteNumeroFacturaEmpresa } from "@/lib/facturacion/factura-suscripcion-servidor";
+import { inPorTandas } from "@/lib/supabase/in-por-tandas";
 
 
 export async function GET(request: NextRequest) {
@@ -47,11 +48,13 @@ export async function GET(request: NextRequest) {
 
     const lastPagoByFactura = new Map<string, string>();
     if (ids.length > 0) {
-      const { data: pagosRows, error: pagosErr } = await supabase
-        .from("pagos")
-        .select("factura_id, fecha_pago")
-        .eq("empresa_id", auth.empresa_id)
-        .in("factura_id", ids);
+      const { data: pagosRows, error: pagosErr } = await inPorTandas(ids, (tanda) =>
+        supabase
+          .from("pagos")
+          .select("factura_id, fecha_pago")
+          .eq("empresa_id", auth.empresa_id)
+          .in("factura_id", tanda)
+      );
 
       if (!pagosErr && Array.isArray(pagosRows)) {
         for (const p of pagosRows as { factura_id?: string; fecha_pago?: string }[]) {
@@ -71,11 +74,13 @@ export async function GET(request: NextRequest) {
     // el listado sale con "SIN ESTADO" y cliente vacío aunque los datos existan.
     const estadoSifenPorFactura = new Map<string, string>();
     if (ids.length > 0) {
-      const feQ = await supabase
-        .from("factura_electronica")
-        .select("factura_id, estado_sifen")
-        .eq("empresa_id", auth.empresa_id)
-        .in("factura_id", ids);
+      const feQ = await inPorTandas(ids, (tanda) =>
+        supabase
+          .from("factura_electronica")
+          .select("factura_id, estado_sifen")
+          .eq("empresa_id", auth.empresa_id)
+          .in("factura_id", tanda)
+      );
       if (!feQ.error && Array.isArray(feQ.data)) {
         for (const r of feQ.data as Array<{ factura_id?: string; estado_sifen?: string | null }>) {
           if (r.factura_id) estadoSifenPorFactura.set(String(r.factura_id), String(r.estado_sifen ?? ""));
@@ -92,11 +97,13 @@ export async function GET(request: NextRequest) {
     );
     const nombrePorCliente = new Map<string, string>();
     if (clienteIds.length > 0) {
-      const cQ = await supabase
-        .from("clientes")
-        .select("id, nombre, empresa")
-        .eq("empresa_id", auth.empresa_id)
-        .in("id", clienteIds);
+      const cQ = await inPorTandas(clienteIds, (tanda) =>
+        supabase
+          .from("clientes")
+          .select("id, nombre, empresa")
+          .eq("empresa_id", auth.empresa_id)
+          .in("id", tanda)
+      );
       if (!cQ.error && Array.isArray(cQ.data)) {
         for (const c of cQ.data as Array<{ id: string; nombre: string | null; empresa: string | null }>) {
           const n = (c.empresa && c.empresa.trim()) || (c.nombre && c.nombre.trim()) || "";
